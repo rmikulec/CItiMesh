@@ -1,3 +1,4 @@
+sqlalchemy
 fastapi
 openai
 pydantic
