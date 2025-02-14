@@ -1,0 +1,10 @@
+fastapi
+openai
+pydantic
+dash
+matplotlib
+pandas
+numpy
+seaborn
+plotly
+
