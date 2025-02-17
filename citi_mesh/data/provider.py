@@ -14,6 +14,7 @@ from citi_mesh.database.resource import Resource, ResourceProvider
 from citi_mesh.database.db_pool import DatabasePool
 from citi_mesh.config import Config
 
+
 class ResoureList(BaseModel):
     resouces: list[Resource]
 
@@ -67,7 +68,7 @@ class BaseProvider(ABC):
             tenant_id=get_tenant_from_name(name=self.tenant_name).id,
             name=self.name,
             source_type=self.__source_type__,
-            resources=[]
+            resources=[],
         )
 
         for resource in resources:
@@ -94,10 +95,10 @@ class BaseProvider(ABC):
             completion = await self.client.beta.chat.completions.parse(
                 model=Config.parsing_model,
                 messages=[
-                    {'role': 'system', 'content': SYSTEM_MESSAGE},
-                    {'role': 'user', 'content': "\n".join(source_strings)}
+                    {"role": "system", "content": SYSTEM_MESSAGE},
+                    {"role": "user", "content": "\n".join(source_strings)},
                 ],
-                response_format=ResoureList
+                response_format=ResoureList,
             )
 
             resources = completion.choices[0].message.parsed.resouces
@@ -105,8 +106,10 @@ class BaseProvider(ABC):
             return resources
         else:
             return []
-        
-    async def pull_resources(self, debug: bool = False, chunk_size: int = 20) -> Optional[list[Resource]]:
+
+    async def pull_resources(
+        self, debug: bool = False, chunk_size: int = 20
+    ) -> Optional[list[Resource]]:
         """
         Pulls resources out of the original source and syncs them to the database
 
@@ -115,12 +118,14 @@ class BaseProvider(ABC):
             of Resources instead. Defaults to False.
           - chunk_size: The size of each sublist that is sent over to openai. The bigger
             the chunk size, the faster it will run, but may result in lower accuracy.
-            Defaults to 25. 
+            Defaults to 25.
         """
         source_data = self._parse_source()
 
-        chunked_data = [source_data[i : i + chunk_size] for i in range(0, len(source_data), chunk_size)]
-        
+        chunked_data = [
+            source_data[i : i + chunk_size] for i in range(0, len(source_data), chunk_size)
+        ]
+
         openai_results = await asyncio.gather(
             *[self._openai_parse(source_strings=source_str) for source_str in chunked_data]
         )
@@ -131,6 +136,7 @@ class BaseProvider(ABC):
             self._sync_to_db(resources)
         else:
             return resources
+
 
 class WebpageProvider(BaseProvider):
     """
@@ -145,15 +151,10 @@ class WebpageProvider(BaseProvider):
 
     __source_type__ = "webpage"
 
-    def __init__(
-        self,
-        tenant_name: str,
-        name: str,
-        url: str
-    ):
+    def __init__(self, tenant_name: str, name: str, url: str):
         self.url = url
         super().__init__(tenant_name=tenant_name, name=name)
-    
+
     def _parse_source(self):
         """
         Private function that uses the requests library to pull the
@@ -162,17 +163,14 @@ class WebpageProvider(BaseProvider):
 
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/98.0.4758.102 Safari/537.36"
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/98.0.4758.102 Safari/537.36"
         }
-        response = requests.get(
-            url=self.url,
-            headers=headers
-        )
+        response = requests.get(url=self.url, headers=headers)
 
         return [response.text]
 
-    
+
 class CSVProvider(BaseProvider):
     """
     Provider class used to update the Resources DB with information
@@ -186,12 +184,7 @@ class CSVProvider(BaseProvider):
 
     __source_type__ = "csv_file"
 
-    def __init__(
-        self,
-        tenant_name: str, 
-        name: str, 
-        csv_path: Union[str, pathlib.Path]
-    ):
+    def __init__(self, tenant_name: str, name: str, csv_path: Union[str, pathlib.Path]):
         self.csv_path = pathlib.Path(csv_path)
         super().__init__(tenant_name=tenant_name, name=name)
 
@@ -204,7 +197,4 @@ class CSVProvider(BaseProvider):
         # Replace all np.nan with Python None
         df = df.replace({np.nan: None})
         records_array = df.to_dict(orient="records")
-        return [
-            json.dumps(record, indent=2)
-            for record in records_array
-        ]
+        return [json.dumps(record, indent=2) for record in records_array]
