@@ -6,17 +6,35 @@ import json
 import pandas as pd
 import numpy as np
 from abc import abstractmethod, ABC
-from pydantic import BaseModel
-from typing import Union, Optional
+from pydantic import BaseModel, create_model
+from functools import cached_property
+from typing import Union, Optional, Literal
+from sqlalchemy.orm import Session
+from enum import Enum
 
 from citi_mesh.database.crud import get_tenant_from_name
-from citi_mesh.database.resource import Resource, ResourceProvider
+from citi_mesh.database.resource import Resource, Provider, Tenant
 from citi_mesh.database.db_pool import DatabasePool
 from citi_mesh.config import Config
 
 
-class ResoureList(BaseModel):
-    resouces: list[Resource]
+
+def create_resource_list_model(tenant: Tenant):
+    """
+    Return a pydantic model class that has a single field:
+    `resources: List[DynamicResource]`
+    where `DynamicResource` is the subclass generated from resource_types.
+    """
+    DynamicResource = tenant.create_resource_openai_class()
+
+    ResourceList = create_model(
+        "ResourceList",
+        resources=(list[DynamicResource], ...)
+    )
+
+    return ResourceList
+
+    
 
 
 SYSTEM_MESSAGE = """
@@ -48,11 +66,17 @@ class BaseProvider(ABC):
 
     __source_type__ = "base"
 
-    def __init__(self, tenant_name: str, name: str):
+    def __init__(self, tenant_name: str, name: str, session: Session):
         self.tenant_name = tenant_name
         self.name = name
+        self.session = session
         self.client = openai.AsyncClient()
         self.db_pool = DatabasePool.get_instance()
+
+
+    @cached_property
+    def tenant(self) -> Tenant:
+        return get_tenant_from_name(session=self.session, tenant_name=self.tenant_name)
 
     @abstractmethod
     def _parse_source(self) -> list[str]:
@@ -60,26 +84,32 @@ class BaseProvider(ABC):
         # openai to parse resources from
         pass
 
-    def _sync_to_db(self, resources: list[Resource]):
+    def _sync_to_db(self, openai_resources: list[Resource]):
         """
         Private method to sync resources to the SQL Database
         """
-        resource_provider = ResourceProvider(
-            tenant_id=get_tenant_from_name(name=self.tenant_name).id,
+
+        # Create the new provider with empty resources
+        provider = Provider(
+            tenant_id=self.tenant.id,
             name=self.name,
-            source_type=self.__source_type__,
+            provider_type=self.__source_type__,
             resources=[],
         )
 
-        for resource in resources:
-            resource.provider_id = resource_provider.id
-            resource_provider.resources.append(resource)
+        # Loop through the openai generated resources and
+        # using the Tenant, create the proper resources to
+        # add to the Provider
+        for resource in openai_resources:
+            new_resource = self.tenant.create_resource_from_openai_resource(
+                openai_resource=resource,
+                provider_id=provider.id
+            )
+            provider.resources.append(new_resource)
 
-        with self.db_pool.get_session() as session:
-
-            session.add(resource_provider.to_orm())
-            session.commit()
-            session.flush()
+        self.session.merge(provider.to_orm())
+        self.session.commit()
+        self.session.flush()
 
     async def _openai_parse(self, source_strings: list[str]) -> list[Resource]:
         """
@@ -98,10 +128,10 @@ class BaseProvider(ABC):
                     {"role": "system", "content": SYSTEM_MESSAGE},
                     {"role": "user", "content": "\n".join(source_strings)},
                 ],
-                response_format=ResoureList,
+                response_format=create_resource_list_model(self.tenant),
             )
 
-            resources = completion.choices[0].message.parsed.resouces
+            resources = completion.choices[0].message.parsed.resources
 
             return resources
         else:
@@ -151,9 +181,9 @@ class WebpageProvider(BaseProvider):
 
     __source_type__ = "webpage"
 
-    def __init__(self, tenant_name: str, name: str, url: str):
+    def __init__(self, tenant_name: str, name: str, session: Session, url: str):
         self.url = url
-        super().__init__(tenant_name=tenant_name, name=name)
+        super().__init__(tenant_name=tenant_name, name=name, session=session)
 
     def _parse_source(self):
         """
@@ -184,9 +214,9 @@ class CSVProvider(BaseProvider):
 
     __source_type__ = "csv_file"
 
-    def __init__(self, tenant_name: str, name: str, csv_path: Union[str, pathlib.Path]):
+    def __init__(self, tenant_name: str, name: str, session: Session, csv_path: Union[str, pathlib.Path]):
         self.csv_path = pathlib.Path(csv_path)
-        super().__init__(tenant_name=tenant_name, name=name)
+        super().__init__(tenant_name=tenant_name, name=name, session=session)
 
     def _parse_source(self):
         """
@@ -195,6 +225,7 @@ class CSVProvider(BaseProvider):
         """
         df = pd.read_csv(self.csv_path)
         # Replace all np.nan with Python None
+        # This is so that the rows are JSON Serializable
         df = df.replace({np.nan: None})
         records_array = df.to_dict(orient="records")
         return [json.dumps(record, indent=2) for record in records_array]
