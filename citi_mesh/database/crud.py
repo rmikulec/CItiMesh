@@ -7,21 +7,26 @@ from sqlalchemy import distinct
 from datetime import datetime
 
 from citi_mesh.database.resource import (
-    Tenant, Provider, Resource, ResourceType, Address,
-    TenantTable, ProviderTable, ResourceTable, ResourceTypeTable
+    Tenant,
+    Provider,
+    Resource,
+    ResourceType,
+    Address,
+    TenantTable,
+    ProviderTable,
+    ResourceTable,
+    ResourceTypeTable,
 )
+
 
 # ----------------------------------------------------------------------
 # 1. Add a new tenant with resource types
 # ----------------------------------------------------------------------
-def create_tenant_with_resource_types(
-    session: Session,
-    tenant_data: Tenant
-) -> Tenant:
+def create_tenant_with_resource_types(session: Session, tenant_data: Tenant) -> Tenant:
     """
-    Creates a new Tenant (and any nested ResourceType objects) in the database 
+    Creates a new Tenant (and any nested ResourceType objects) in the database
     from a Pydantic Tenant model.
-    
+
     :param session: SQLAlchemy session
     :param tenant_data: Pydantic Tenant object with .resource_types populated
     :return: Newly-created Tenant as a Pydantic model (with updated IDs, timestamps, etc.)
@@ -41,27 +46,24 @@ def create_tenant_with_resource_types(
 # ----------------------------------------------------------------------
 # 2. Add a new provider with resources that are linked to resource types
 # ----------------------------------------------------------------------
-def create_provider_with_resources(
-    session: Session,
-    provider_data: Provider
-) -> Provider:
+def create_provider_with_resources(session: Session, provider_data: Provider) -> Provider:
     """
     Creates a new Provider and its nested Resource objects (and any nested ResourceTypes)
     from a Pydantic Provider model.
 
     :param session: SQLAlchemy session
-    :param provider_data: Pydantic Provider object with .resources 
+    :param provider_data: Pydantic Provider object with .resources
                          (and possibly each Resource containing .resource_types).
     :return: Newly-created Provider as a Pydantic model
     """
     # Convert to a SQLAlchemy ProviderTable instance
     provider_orm = provider_data.to_orm()
-    
+
     # Persist
     session.add(provider_orm)
     session.commit()
     session.refresh(provider_orm)
-    
+
     # Convert back to Pydantic
     return Provider.model_validate(provider_orm, from_attributes=True)
 
@@ -70,12 +72,11 @@ def create_provider_with_resources(
 # 3. Get a tenant and all of its resource types and providers (without resources)
 # ----------------------------------------------------------------------
 def get_tenant_with_resource_types_and_providers(
-    session: Session,
-    tenant_id: str
+    session: Session, tenant_id: str
 ) -> Optional[Tenant]:
     """
     Loads a Tenant by ID, then returns it as a Pydantic Tenant model.
-    Will include the tenant's resource_types and providers, but 
+    Will include the tenant's resource_types and providers, but
     .resources won't be auto-accessed unless you explicitly load them.
     """
     # Eager-load resource_types and providers but not resources
@@ -95,13 +96,11 @@ def get_tenant_with_resource_types_and_providers(
     # Convert to Pydantic
     return Tenant.model_validate(tenant_orm, from_attributes=True)
 
-def get_tenant_from_name(
-    session: Session,
-    tenant_name: str
-) -> Optional[Tenant]:
+
+def get_tenant_from_name(session: Session, tenant_name: str) -> Optional[Tenant]:
     """
     Loads a Tenant by ID, then returns it as a Pydantic Tenant model.
-    Will include the tenant's resource_types and providers, but 
+    Will include the tenant's resource_types and providers, but
     .resources won't be auto-accessed unless you explicitly load them.
     """
     # Eager-load resource_types and providers but not resources
@@ -125,56 +124,34 @@ def get_tenant_from_name(
 # ----------------------------------------------------------------------
 # 4. Get all resources from a tenant
 # ----------------------------------------------------------------------
-def get_all_resources_from_tenant(
-    session: Session,
-    tenant_id: str
-) -> List[Resource]:
+def get_all_resources_from_tenant(session: Session, tenant_id: str) -> List[Resource]:
     """
     Fetches all resources belonging to a given tenant,
     returns them as a list of Pydantic Resource models.
     """
-    resources_orm = (
-        session.query(ResourceTable)
-        .filter_by(tenant_id=tenant_id)
-        .all()
-    )
+    resources_orm = session.query(ResourceTable).filter_by(tenant_id=tenant_id).all()
 
-    return [
-        Resource.model_validate(r, from_attributes=True)
-        for r in resources_orm
-    ]
+    return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
 
 
 # ----------------------------------------------------------------------
 # 5. Get all resources from a provider
 # ----------------------------------------------------------------------
-def get_all_resources_from_provider(
-    session: Session,
-    provider_id: str
-) -> List[Resource]:
+def get_all_resources_from_provider(session: Session, provider_id: str) -> List[Resource]:
     """
     Fetches all resources belonging to a given provider,
     returns them as a list of Pydantic Resource models.
     """
-    resources_orm = (
-        session.query(ResourceTable)
-        .filter_by(provider_id=provider_id)
-        .all()
-    )
+    resources_orm = session.query(ResourceTable).filter_by(provider_id=provider_id).all()
 
-    return [
-        Resource.model_validate(r, from_attributes=True)
-        for r in resources_orm
-    ]
+    return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
 
 
 # ----------------------------------------------------------------------
 # 6. Get all resources from a tenant based on a set of resource types
 # ----------------------------------------------------------------------
 def get_all_resources_for_tenant_by_types(
-    session: Session,
-    tenant_id: str,
-    resource_type_names: List[str]
+    session: Session, tenant_id: str, resource_type_names: List[str]
 ) -> List[Resource]:
     """
     Returns all resources for a tenant that match any of the given resource types.
@@ -190,19 +167,14 @@ def get_all_resources_for_tenant_by_types(
         .all()
     )
 
-    return [
-        Resource.model_validate(r, from_attributes=True)
-        for r in resources_orm
-    ]
+    return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
 
 
 # ----------------------------------------------------------------------
 # 7. Get all resources from a provider based on a set of resource types
 # ----------------------------------------------------------------------
 def get_all_resources_for_provider_by_types(
-    session: Session,
-    provider_id: str,
-    resource_type_names: List[str]
+    session: Session, provider_id: str, resource_type_names: List[str]
 ) -> List[Resource]:
     """
     Returns all resources for a provider that match any of the given resource types.
@@ -216,8 +188,4 @@ def get_all_resources_for_provider_by_types(
         .all()
     )
 
-    return [
-        Resource.model_validate(r, from_attributes=True)
-        for r in resources_orm
-    ]
-
+    return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]

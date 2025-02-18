@@ -37,7 +37,7 @@ def setup_db(reset_db: bool = True):
 
     with DatabasePool.get_session() as session:
         demo_tenant_json = json.loads(
-            pathlib.Path('/Users/ryan/projects/CitiMesh/demo_tenant.json').read_text()
+            pathlib.Path("/Users/ryan/projects/CitiMesh/demo_tenant.json").read_text()
         )
         demo_tenant = resource.Tenant.model_validate(demo_tenant_json)
         session.add(demo_tenant.to_orm())

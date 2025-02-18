@@ -18,7 +18,6 @@ from citi_mesh.database.db_pool import DatabasePool
 from citi_mesh.config import Config
 
 
-
 def create_resource_list_model(tenant: Tenant):
     """
     Return a pydantic model class that has a single field:
@@ -27,14 +26,9 @@ def create_resource_list_model(tenant: Tenant):
     """
     DynamicResource = tenant.create_resource_openai_class()
 
-    ResourceList = create_model(
-        "ResourceList",
-        resources=(list[DynamicResource], ...)
-    )
+    ResourceList = create_model("ResourceList", resources=(list[DynamicResource], ...))
 
     return ResourceList
-
-    
 
 
 SYSTEM_MESSAGE = """
@@ -73,7 +67,6 @@ class BaseProvider(ABC):
         self.client = openai.AsyncClient()
         self.db_pool = DatabasePool.get_instance()
 
-
     @cached_property
     def tenant(self) -> Tenant:
         return get_tenant_from_name(session=self.session, tenant_name=self.tenant_name)
@@ -102,8 +95,7 @@ class BaseProvider(ABC):
         # add to the Provider
         for resource in openai_resources:
             new_resource = self.tenant.create_resource_from_openai_resource(
-                openai_resource=resource,
-                provider_id=provider.id
+                openai_resource=resource, provider_id=provider.id
             )
             provider.resources.append(new_resource)
 
@@ -214,7 +206,9 @@ class CSVProvider(BaseProvider):
 
     __source_type__ = "csv_file"
 
-    def __init__(self, tenant_name: str, name: str, session: Session, csv_path: Union[str, pathlib.Path]):
+    def __init__(
+        self, tenant_name: str, name: str, session: Session, csv_path: Union[str, pathlib.Path]
+    ):
         self.csv_path = pathlib.Path(csv_path)
         super().__init__(tenant_name=tenant_name, name=name, session=session)
 

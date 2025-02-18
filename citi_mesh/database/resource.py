@@ -21,7 +21,6 @@ from sqlalchemy.orm import relationship
 from citi_mesh.database.base import BaseTable, FromDBModel
 
 
-
 # --------------------------------------------------------------------
 # SQLAlchemy Models
 # --------------------------------------------------------------------
@@ -35,19 +34,13 @@ class TenantTable(BaseTable):
 
     # Relationships
     providers = relationship(
-        "ProviderTable",
-        back_populates="tenant",
-        cascade="all, delete-orphan"
+        "ProviderTable", back_populates="tenant", cascade="all, delete-orphan"
     )
     resource_types = relationship(
-        "ResourceTypeTable",
-        back_populates="tenant",
-        cascade="all, delete-orphan"
+        "ResourceTypeTable", back_populates="tenant", cascade="all, delete-orphan"
     )
     resources = relationship(
-        "ResourceTable",
-        back_populates="tenant",
-        cascade="all, delete-orphan"
+        "ResourceTable", back_populates="tenant", cascade="all, delete-orphan"
     )
 
 
@@ -55,20 +48,16 @@ class ProviderTable(BaseTable):
     tenant_id = Column(String(length=128), ForeignKey("tenant.id"))
     name = Column(String(length=64))
     provider_type = Column(String)  # formerly "source_type"
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    __table_args__ = (
-        Index("idx_provider_tenant_id_name", "tenant_id", "name", unique=False),
-    )
+    __table_args__ = (Index("idx_provider_tenant_id_name", "tenant_id", "name", unique=False),)
 
     # Relationships
     tenant = relationship("TenantTable", back_populates="providers")
     resources = relationship(
-        "ResourceTable",
-        back_populates="provider",
-        cascade="all, delete-orphan"
+        "ResourceTable", back_populates="provider", cascade="all, delete-orphan"
     )
 
 
@@ -89,9 +78,7 @@ class ResourceTypeTable(BaseTable):
 
     # Many-to-many link back to resources
     resources = relationship(
-        "ResourceTable",
-        secondary="resource_type_link",
-        back_populates="resource_types"
+        "ResourceTable", secondary="resource_type_link", back_populates="resource_types"
     )
 
 
@@ -113,9 +100,7 @@ class ResourceTable(BaseTable):
     address = relationship("AddressTable", back_populates="resources")
 
     resource_types = relationship(
-        "ResourceTypeTable",
-        secondary="resource_type_link",
-        back_populates="resources"
+        "ResourceTypeTable", secondary="resource_type_link", back_populates="resources"
     )
 
 
@@ -143,10 +128,10 @@ class AddressTable(BaseTable):
     resources = relationship("ResourceTable", back_populates="address")
 
 
-
 # --------------------------------------------------------------------
 # Pydantic Models
 # --------------------------------------------------------------------
+
 
 class Address(FromDBModel):
     __ormclass__ = AddressTable
@@ -161,11 +146,13 @@ class Address(FromDBModel):
     @model_validator(mode="after")
     def get_google_place_id(self):
         """
-        Example logic to auto-populate google_place_id 
+        Example logic to auto-populate google_place_id
         (only if you really want to do this at model validation time).
         """
         client = googlemaps.Client(key=os.environ["GOOGLE_MAPS_API"])
-        address_str = f"{self.street} {self.street2 or ''}, {self.city}, {self.state}, {self.zip_code}"
+        address_str = (
+            f"{self.street} {self.street2 or ''}, {self.city}, {self.state}, {self.zip_code}"
+        )
         res = client.find_place(address_str, input_type="textquery")
         try:
             self.google_place_id = res["candidates"][0]["place_id"]
@@ -245,17 +232,18 @@ class Tenant(FromDBModel):
         )
 
         return OpenAIResource
-    
 
-    def create_resource_from_openai_resource(self, openai_resource: "ResourceOpenAI", provider_id: str) -> Resource:
+    def create_resource_from_openai_resource(
+        self, openai_resource: "ResourceOpenAI", provider_id: str
+    ) -> Resource:
         """
         Given an instance of the dynamically generated ResourceOpenAI (with enum-based resource_types),
-        create a proper Resource Pydantic model that points to this Tenant and references the matching 
+        create a proper Resource Pydantic model that points to this Tenant and references the matching
         resource type objects from self.resource_types.
-        
+
         Assumes:
         - self.get_resource_type(name: str) returns a Pydantic ResourceType or None if not found.
-        - 'openai_resource' has the fields name, description, phone_number, website, address, 
+        - 'openai_resource' has the fields name, description, phone_number, website, address,
             and resource_types as a list of ResourceTypeEnum.
         """
         # Convert each enum member to its string value, then look up the corresponding ResourceType
@@ -264,7 +252,9 @@ class Tenant(FromDBModel):
             # enum_value.value is e.g. "Shelter" or "Food Pantry"
             rtype = self.get_resource_type(enum_value.value)
             if not rtype:
-                raise ValueError(f"No matching resource_type found for '{enum_value.value}' in tenant '{self.name}'")
+                raise ValueError(
+                    f"No matching resource_type found for '{enum_value.value}' in tenant '{self.name}'"
+                )
             resolved_types.append(rtype)
 
         # Build a new Resource referencing this tenant, using the openai_resource fields
@@ -276,15 +266,12 @@ class Tenant(FromDBModel):
             phone_number=openai_resource.phone_number,
             website=openai_resource.website,
             address=openai_resource.address,  # if openai_resource includes an Address, re-use it
-            resource_types=resolved_types
+            resource_types=resolved_types,
         )
         return resource
-    
 
     def get_resource_type(self, type_name):
-        return list(
-            filter(
-                lambda rtype: rtype.name==type_name,
-                self.resource_types
-            )
-        )[0]
+        return list(filter(lambda rtype: rtype.name == type_name, self.resource_types))[0]
+
+    def get_provider(self, provider_name: str):
+        return list(filter(lambda provider: provider.name == provider_name, self.providers))[0]
