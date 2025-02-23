@@ -21,6 +21,9 @@ class CitimeshConfig(BaseSettings):
     db_password: str = Field(default=os.getenv("SQL_ADMIN_PASSWORD"))
     db_driver: str = Field(default="ODBC Driver 18 for SQL Server")
 
+    # Service configuration
+    conversation_expiration: int = Field(default=30)
+
     def __init__(self, **values):
         super().__init__(**values)
         # Set the database connection URL after the initial values have been set

@@ -14,7 +14,7 @@ Keep in mind, that your result will eventually be sent to the user via SMS text 
 
 class GoogleMapsDirectionsTool(BaseCitimeshTool):
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__(
             tool_name="get_directions",
             tool_desc="Get the directions between to places in NYC",
@@ -25,6 +25,8 @@ class GoogleMapsDirectionsTool(BaseCitimeshTool):
                 },
                 "destination": {"type": "string", "description": "Where the user wants to go"},
             },
+            *args,
+            **kwargs
         )
 
         self.gmaps = googlemaps.Client(key=os.environ["GOOGLE_MAPS_API"])
@@ -45,7 +47,7 @@ class GoogleMapsDirectionsTool(BaseCitimeshTool):
 
         return response.choices[0].message.content
 
-    def call(self, origin: str, destination: str):
+    def call(self, origin: str, destination: str) -> str:
         # Use Google Maps to convert the text lookup to place IDs
         origin_place_id = self._lookup_place(origin)
         destination_place_id = self._lookup_place(destination)
