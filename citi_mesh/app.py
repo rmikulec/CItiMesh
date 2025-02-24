@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Request
+import os
+from fastapi import FastAPI, Request, Form, HTTPException
 from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.request_validator import RequestValidator  
 
 from citi_mesh.engine import CitiEngine
 from citi_mesh.dev.demo import load_output_config, load_tools
@@ -18,31 +20,27 @@ async def read_root():
 
 
 @app.post("/sms")
-async def sms_reply(request: Request):
-    # Retrieve form data from the incoming POST request
-    form = await request.form()
-    incoming_msg = form.get("Body", "")
-    from_number = form.get("From", "")
+async def sms(
+    request: Request, From: str = Form(...), Body: str = Form(...) 
+):
+    validator = RequestValidator(os.environ["TWILIO_AUTH_TOKEN"])
+    form_ = await request.form()
+    if not validator.validate(
+        str(request.url), 
+        form_, 
+        request.headers.get("X-Twilio-Signature", "")
+    ):
+        raise HTTPException(status_code=400, detail="Error in Twilio Signature")
+
 
     response = await engine.chat(
-        phone=from_number,
-        message=incoming_msg
+        phone=From,
+        message=Body
     )
 
-    # Create a TwiML response object to reply to the sender
-    resp = MessagingResponse()
-    resp.message(response.message)
-
-    # Optional: Use the REST API to send an additional message
-    # client.messages.create(
-    #     body="This is an extra message sent via the Twilio API!",
-    #     from_='+YourTwilioNumber',
-    #     to=from_number
-    # )
-
-    # Return the TwiML as XML
-    return Response(content=str(resp), media_type="application/xml")
-
+    response = MessagingResponse()
+    msg = response.message(response.message)
+    return Response(content=str(response), media_type="application/xml")
 
 if __name__ == "__main__":
     app.run(debug=True)
