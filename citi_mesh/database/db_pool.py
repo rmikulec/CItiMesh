@@ -63,7 +63,7 @@ class DatabasePool:
                     )
                     logger.debug(
                         "DatabasePool initialized with connection_url=%s, pool_size=%d, pool_timeout=%s",
-                        connection_url,
+                        connection_url[0:25],
                         pool_size,
                         pool_timeout,
                     )
