@@ -30,6 +30,7 @@ def load_output_config() -> OpenAIOutput:
     return OutputModel
 
 
-def load_tools(session):
-    tenant = get_tenant_from_name(session=session, tenant_name="demo")
-    return CitiToolManager(tools=["google_maps", "resources"], tenant=tenant, session=session)
+def load_tools():
+    with DatabasePool.get_session() as session:
+        tenant = get_tenant_from_name(session=session, tenant_name="demo")
+        return CitiToolManager(tools=["google_maps", "resources"], tenant=tenant, session=session)
