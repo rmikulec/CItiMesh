@@ -46,6 +46,7 @@ class CitiEngine:
     def _upsert_to_db(self):
         pass
 
+    @classmethod
     async def chat(cls, phone: str, message: str) -> OpenAIOutput:
         cls._message_tracker.add(phone=phone, message={"role": "user", "content": message})
 
@@ -93,6 +94,7 @@ class CitiEngine:
 
         return message
 
+    @classmethod
     async def get_processing_message(cls, phone):
         completion = await cls._client.chat.completions.create(
             messages=[
@@ -108,5 +110,6 @@ class CitiEngine:
 
         return message
 
+    @classmethod
     def is_new_phone(cls, phone) -> bool:
         return phone in cls._message_tracker.messages
