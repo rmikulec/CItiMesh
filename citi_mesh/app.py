@@ -37,8 +37,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app = FastAPI()
-
 # Example async functions that check dependencies.
 # Replace the contents of these functions with your actual health-check logic.
 
