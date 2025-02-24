@@ -98,13 +98,14 @@ async def sms(
         raise HTTPException(status_code=400, detail="Error in Twilio Signature")
 
 
-    response = await CitiEngine.chat(
+    engine_res = await CitiEngine.chat(
         phone=From,
         message=Body
     )
 
     response = MessagingResponse()
-    msg = response.message(response.message)
+    logger.info(f"Message produced: {engine_res.message}", extra=engine_res.model_dump(exclude=['message']))
+    msg = response.message(engine_res.message)
     return Response(content=str(response), media_type="application/xml")
 
 if __name__ == "__main__":
