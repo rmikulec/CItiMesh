@@ -3,15 +3,16 @@ from abc import ABC, abstractmethod
 from citi_mesh.database.resource import Tenant
 from sqlalchemy.orm import Session
 
+
 class BaseCitimeshTool(ABC):
 
     def __init__(
-        self, 
-        tool_name: str, 
-        tool_desc: str, 
+        self,
+        tool_name: str,
+        tool_desc: str,
         args: dict,
         tenant: Tenant = None,
-        session: Session = None
+        session: Session = None,
     ):
         self.tool_name = tool_name
         self.tool_desc = tool_desc

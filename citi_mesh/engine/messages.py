@@ -5,6 +5,7 @@ from typing import List, Dict, Optional
 from citi_mesh.config import Config
 from citi_mesh.engine.system_message import SYSTEM_MESSAGE
 
+
 @dataclass
 class MessageArray:
     messages: List[Dict]
@@ -15,24 +16,21 @@ class MessageTracker:
     def __init__(self, expiration_minutes: int = 5):
         """
         Initializes the MessageTracker.
-        
+
         :param expiration_minutes: Number of minutes after which an unused
                                    phone number's messages are cleared.
         """
         self.expiration_delta = timedelta(minutes=expiration_minutes)
         self.messages: Dict[str, MessageArray] = {}  # Maps phone numbers to MessageArray
 
-
-
     def remove_phone(self, phone: str):
         """
         Removes the messages for a specific phone number.
-        
+
         :param phone: The phone number as a string.
         """
         if phone in self.messages:
             del self.messages[phone]
-
 
     def _cleanup(self):
         """
@@ -41,7 +39,8 @@ class MessageTracker:
         now = datetime.now()
         # Identify phone numbers that have expired
         to_delete = [
-            phone for phone, msg_array in self.messages.items()
+            phone
+            for phone, msg_array in self.messages.items()
             if now - msg_array.last_updated > self.expiration_delta
         ]
         for phone in to_delete:
@@ -51,7 +50,7 @@ class MessageTracker:
         """
         Adds a message (as a dictionary) for the given phone number.
         Updates the last_updated time for that phone number.
-        
+
         :param phone: The phone number as a string.
         :param message: The message to add (as a dictionary).
         """
@@ -66,7 +65,7 @@ class MessageTracker:
         """
         Adds a message (as a dictionary) for the given phone number.
         Updates the last_updated time for that phone number.
-        
+
         :param phone: The phone number as a string.
         :param message: The message to add (as a dictionary).
         """
@@ -81,7 +80,7 @@ class MessageTracker:
         """
         Retrieves the list of messages for the given phone number.
         Updates the last_updated time if the phone number exists.
-        
+
         :param phone: The phone number as a string.
         :return: A list of messages or None if the phone number doesn't exist.
         """
@@ -96,11 +95,11 @@ class MessageTracker:
         """
         self.messages.clear()
 
-    def get_conversation(self, phone: str)->str:
+    def get_conversation(self, phone: str) -> str:
         conv_str = ""
         for message in self.get(phone):
-            if message['role'] == 'assistant':
+            if message["role"] == "assistant":
                 conv_str += f"\n Assistant: {message['content']}"
-            elif message['role'] == 'user':
+            elif message["role"] == "user":
                 conv_str += f"\n User: {message['content']}"
         return conv_str

@@ -65,3 +65,60 @@ resource "azurerm_mssql_firewall_rule" "allow_power_bi_service" {
   start_ip_address    = "13.66.0.0"  # Example IP range for Power BI service
   end_ip_address      = "13.67.255.255"
 }
+
+
+
+
+resource "azurerm_service_plan" "citimesh_plan" {
+  sku_name = "B1"
+  os_type = "Linux"
+  name                = "citimesh-app-service-plan"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_container_registry" "citimesh_registry" {
+  name                = var.registry_name
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  sku                 = "Basic"
+}
+
+resource "azurerm_app_service" "citimesh_app" {
+  name                = "citimesh-app"
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+  app_service_plan_id = azurerm_service_plan.citimesh_plan.id
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  app_settings = {
+    "DOCKER_REGISTRY_SERVER_URL"      = azurerm_container_registry.citimesh_registry.login_server
+    "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
+    "OPENAI_API_KEY"                  = data.azurerm_key_vault_secret.openai_api_key.value
+    "TWILIO_CODE"                     = data.azurerm_key_vault_secret.twilio_code.value
+    "TWILIO_ACCOUNT_SID"              = data.azurerm_key_vault_secret.twilio_account_sid.value
+    "TWILIO_ACCOUNT_TOKEN"            = data.azurerm_key_vault_secret.twilio_account_code.value
+    "TWILIO_API_KEY"                  = data.azurerm_key_vault_secret.twilio_api_key.value
+    "TWILIO_API_SECRET"               = data.azurerm_key_vault_secret.twilio_api_secret.value
+    "TWILIO_NUMBER"                   = var.phone_number
+    "TWILIO_MESSAGE_SERVICE_SID"      = data.azurerm_key_vault_secret.twilio_message_service_sid.value
+    "GOOGLE_MAPS_API"                 = data.azurerm_key_vault_secret.google_maps_api.value
+    "SQL_ADMIN_PASSWORD"              = local.admin_password
+  }
+
+  site_config {
+    linux_fx_version = "DOCKER|${azurerm_container_registry.citimesh_registry.login_server}/${var.image_name}:${var.image_tag}"
+    acr_use_managed_identity_credentials = "true"
+  }
+
+  depends_on = [azurerm_container_registry.citimesh_registry]
+}
+
+resource "azurerm_role_assignment" "acr_pull_role" {
+  scope                = azurerm_container_registry.citimesh_registry.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_app_service.citimesh_app.identity[0].principal_id
+}

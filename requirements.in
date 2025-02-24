@@ -1,11 +1,13 @@
+asyncio
+pyodbc
+googlemaps
 sqlalchemy
 fastapi
 openai
 pydantic
-dash
-matplotlib
 pandas
 numpy
-seaborn
-plotly
 twilio
+uvicorn
+pydantic-settings
+python-dotenv

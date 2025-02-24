@@ -26,7 +26,7 @@ class GoogleMapsDirectionsTool(BaseCitimeshTool):
                 "destination": {"type": "string", "description": "Where the user wants to go"},
             },
             *args,
-            **kwargs
+            **kwargs,
         )
 
         self.gmaps = googlemaps.Client(key=os.environ["GOOGLE_MAPS_API"])

@@ -13,6 +13,7 @@ from citi_mesh.database.resource import Tenant
 
 logger = get_logger(__name__)
 
+
 class ResourceTool(BaseCitimeshTool):
 
     def __init__(
@@ -23,7 +24,7 @@ class ResourceTool(BaseCitimeshTool):
         require_resource_type: bool = True,
         require_provider_name: bool = False,
     ):
-        
+
         logger.info(f"TenantID from tool: {tenant.id}")
 
         resource_types = [rtype.name for rtype in tenant.resource_types]
@@ -45,13 +46,13 @@ class ResourceTool(BaseCitimeshTool):
             provider_names = [provider.name for provider in tenant.providers]
             if not require_provider_name:
                 provider_names.extend("n/a")
-            
+
             args["provider_name"] = {
                 "type": "string",
                 "enum": provider_names,
                 "description": "Name of the provider to the data. This is where the information is from. Respond with 'n/a' if not applicable",
             }
-            
+
         super().__init__(
             tool_name="get_local_services",
             tool_desc="Gets information on local services (including non-profits, charities, community organziations, etc)",
@@ -59,9 +60,6 @@ class ResourceTool(BaseCitimeshTool):
         )
         self.tenant = tenant
         self.session = session
-
-
-
 
     def call(self, service_types: list[str], provider_name: str = None) -> str:
         logger.info(f"TenantID from tool: {self.tenant.id}")
@@ -84,5 +82,5 @@ class ResourceTool(BaseCitimeshTool):
                 for resource in resources
             ],
             indent=2,
-            default=json_serializer
+            default=json_serializer,
         )

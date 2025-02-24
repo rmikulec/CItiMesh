@@ -4,13 +4,13 @@ from citi_mesh.logging import get_logger
 from enum import Enum
 from openai.types.chat import ParsedFunctionToolCall
 import json
-import traceback
 
 from citi_mesh.database.resource import Tenant
 from sqlalchemy.orm import Session
 
 
 logger = get_logger(__name__)
+
 
 class AvailableTools(Enum):
     GOOGLE_MAPS = GoogleMapsDirectionsTool
@@ -58,7 +58,9 @@ class CitiToolManager:
     def from_openai(self, tool_calls: list[ParsedFunctionToolCall]) -> list[dict[str, str]]:
         tool_messages = []
         for tool_call in tool_calls:
-            logger.info(f"Calling tool {tool_call.function.name} with Args: {tool_call.function.arguments}")
+            logger.info(
+                f"Calling tool {tool_call.function.name} with Args: {tool_call.function.arguments}"
+            )
             tool = self._get_tool(tool_call.function.name)
 
             try:
@@ -70,12 +72,12 @@ class CitiToolManager:
                 tool_response = tool.call(**args)
                 logger.info(f"{tool.tool_name} Succeeded")
                 tool_messages.append(
-                        {"role": "tool", "tool_call_id": tool_call.id, "content": tool_response}
+                    {"role": "tool", "tool_call_id": tool_call.id, "content": tool_response}
                 )
             except Exception as e:
                 logger.error(f"Tool {tool.tool_name} Failed: {e}", exc_info=True)
                 tool_messages.append(
-                        {"role": "tool", "tool_call_id": tool_call.id, "content": f"Tool call failed."}
+                    {"role": "tool", "tool_call_id": tool_call.id, "content": f"Tool call failed."}
                 )
 
         return tool_messages

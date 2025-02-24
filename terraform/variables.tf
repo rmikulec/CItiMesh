@@ -41,3 +41,33 @@ variable "aad_admin_username" {
   description = "The Azure AD admin username for SQL Server."
   default     = "citimesh@rmikulecdevgmail.onmicrosoft.com"
 }
+
+variable "location" {
+  description = "Azure region"
+  default     = "East US 2"
+}
+
+variable "registry_name" {
+  description = "Name of the Azure Container Registry"
+  default     = "citimeshregistry"
+}
+
+variable "image_name" {
+  default = "backend"
+  description = "Name of the Docker image"
+}
+
+variable "image_tag" {
+  description = "Tag of the Docker image"
+  default     = "latest"
+}
+
+variable "key_vault_name" {
+  description = "Name of the pre-deployed Key Vault"
+  default = "citimesh-keyvault"
+}
+
+variable "phone_number" {
+  description = "Number of the phone for the service"
+  default = "+19084885426"
+}

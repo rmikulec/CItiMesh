@@ -15,3 +15,8 @@ output "admin_password" {
 output "aad_admin" {
   value = var.aad_admin_username
 }
+
+output "app_service_url" {
+  description = "The URL of the deployed FastAPI app"
+  value       = azurerm_app_service.citimesh_app.default_site_hostname
+}

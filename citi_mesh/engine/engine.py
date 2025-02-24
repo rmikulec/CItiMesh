@@ -1,5 +1,5 @@
 import openai
-import json
+import threading
 from typing import Type
 
 from citi_mesh.engine.system_message import INITIAL_MESSAGE, PROCESSING_MESSAGE
@@ -10,13 +10,31 @@ from citi_mesh.config import Config
 
 
 class CitiEngine:
+    _instance = None
+    _lock = threading.Lock()
+    _message_tracker = None
+    _client = None
+    _output_model = None
+    _tool_manager = None
 
-    def __init__(self, output_model: Type[OpenAIOutput], tools: CitiToolManager):
-        self.output_model = output_model
-        self.client = openai.AsyncOpenAI()
-        self.tools = tools
-
-        self.messages = MessageTracker()
+    @classmethod
+    def get_instance(
+        cls,
+        output_model: Type[OpenAIOutput],
+        tool_manager: CitiToolManager,
+        conversation_expiration: int = 5,
+    ):
+        if not cls._instance:
+            with cls._lock:
+                if not cls._instance:
+                    cls._instance = cls()
+                    cls._message_tracker = MessageTracker(
+                        expiration_minutes=conversation_expiration
+                    )
+                    cls._client = openai.AsyncOpenAI()
+                    cls._output_model = output_model
+                    cls._tool_manager = tool_manager
+        return cls._instance
 
     def _load_from_db(self):
         pass
@@ -24,80 +42,67 @@ class CitiEngine:
     def _upsert_to_db(self):
         pass
 
-    async def chat(self, phone:str, message: str):
-        self.messages.add(
-            phone=phone,
-            message={"role": "user", "content": message}
-        )
+    async def chat(cls, phone: str, message: str) -> OpenAIOutput:
+        cls._message_tracker.add(phone=phone, message={"role": "user", "content": message})
 
-        completion = await self.client.beta.chat.completions.parse(
+        completion = await cls._client.beta.chat.completions.parse(
             model=Config.chat_model,
-            messages=self.messages.get(phone),
-            response_format=self.output_model,
-            tools=self.tools.to_openai(),
+            messages=cls._message_tracker.get(phone),
+            response_format=cls._output_model,
+            tools=cls._tool_manager.to_openai(),
         )
 
         if completion.choices[0].message.tool_calls:
-            self.messages.add(phone=phone, message=completion.choices[0].message)
+            cls._message_tracker.add(phone=phone, message=completion.choices[0].message)
             # Call tools and add messages
-            self.messages.extend(
+            cls._message_tracker.extend(
                 phone=phone,
-                messages=self.tools.from_openai(completion.choices[0].message.tool_calls)
+                messages=cls._tool_manager.from_openai(completion.choices[0].message.tool_calls),
             )
 
-            completion = await self.client.beta.chat.completions.parse(
+            completion = await cls._client.beta.chat.completions.parse(
                 model=Config.chat_model,
-                messages=self.messages.get(phone),
-                response_format=self.output_model,
-                tools=self.tools.to_openai(),
+                messages=cls._message_tracker.get(phone),
+                response_format=cls._output_model,
+                tools=cls._tool_manager.to_openai(),
             )
 
         output = completion.choices[0].message.parsed
-        self.messages.add(
-            phone=phone,
-            message={'role': 'assistant', 'content': output.message}
+        cls._message_tracker.add(
+            phone=phone, message={"role": "assistant", "content": output.message}
         )
 
-        return output 
+        return output
 
-
-    async def get_init_message(self, phone, message: str):
-        completion = await self.client.chat.completions.create(
+    async def get_init_message(cls, phone, message: str):
+        completion = await cls._client.chat.completions.create(
             messages=[
-                {'role': 'system', 'content': INITIAL_MESSAGE},
-                {'role': 'user', 'content': message}
+                {"role": "system", "content": INITIAL_MESSAGE},
+                {"role": "user", "content": message},
             ],
-            model=Config.chat_model
+            model=Config.chat_model,
         )
 
         message = completion.choices[0].message.content
 
-        self.messages.add(
-            phone=phone,
-            message={'role': 'assistant', 'content': message}
-        )
+        cls._message_tracker.add(phone=phone, message={"role": "assistant", "content": message})
 
         return message
-    
 
-    async def get_processing_message(self, phone):
-        completion = await self.client.chat.completions.create(
+    async def get_processing_message(cls, phone):
+        completion = await cls._client.chat.completions.create(
             messages=[
-                {'role': 'system', 'content': PROCESSING_MESSAGE},
-                {'role': 'user', 'content': self.messages.get_conversation(phone)}
+                {"role": "system", "content": PROCESSING_MESSAGE},
+                {"role": "user", "content": cls._message_tracker.get_conversation(phone)},
             ],
-            model=Config.chat_model
+            model=Config.chat_model,
         )
 
         message = completion.choices[0].message.content
 
-        self.messages.add(
-            phone=phone,
-            message={'role': 'assistant', 'content': message}
-        )
+        cls._message_tracker.add(phone=phone, message={"role": "assistant", "content": message})
 
         return message
 
-
-    def is_new_phone(self, phone) -> bool:
-        return phone in self.messages.messages
+    def is_new_phone(cls, phone) -> bool:
+        return phone in cls._message_tracker.messages

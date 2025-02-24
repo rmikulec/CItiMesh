@@ -18,6 +18,7 @@ logger = get_logger(__name__)
 
 DatabasePool.get_instance()
 
+
 def load_output_config() -> OpenAIOutput:
     logger.info("Loading base output config...")
     issue_type = Analytic(
@@ -39,19 +40,17 @@ def load_output_config() -> OpenAIOutput:
 
 
 def load_tools(session):
-    tenant = get_tenant_from_name(
-        session=session,
-        tenant_name="demo"
-    )
-    return CitiToolManager(
-        tools=["google_maps", "resources"],
-        tenant=tenant,
-        session=session
-    )
+    tenant = get_tenant_from_name(session=session, tenant_name="demo")
+    return CitiToolManager(tools=["google_maps", "resources"], tenant=tenant, session=session)
+
 
 class DevTwilioPoller:
     def __init__(
-        self, local_endpoint, output_model, tools, polling_interval=1,
+        self,
+        local_endpoint,
+        output_model,
+        tools,
+        polling_interval=1,
     ):
         """
         account_sid: Your Twilio Account SID.
@@ -68,31 +67,25 @@ class DevTwilioPoller:
         self.polling_interval = polling_interval
         # Keep track of messages we've already processed
 
-
         self.engine = CitiEngine(output_model=output_model, tools=tools)
         self.num_workers = 4
         self.queue = asyncio.Queue()
 
         self.active_numbers = set()
         self.processing_numbers = set()
-        
+
         self.seen_messages = set()
         self.ready_messages = set()
 
     async def send_init_message(self, msg):
-        message = await self.engine.get_init_message(
-            phone=msg.from_,
-            message=msg.body
-        )
+        message = await self.engine.get_init_message(phone=msg.from_, message=msg.body)
         self.client.messages.create(
             to=msg.from_,
             body=message,
             messaging_service_sid=os.getenv("TWILIO_MESSAGE_SERVICE_SID"),
         )
-        logger.info(
-            f"Response: {message}"
-        )
-    
+        logger.info(f"Response: {message}")
+
     async def send_processing_message(self, msg):
         message = await self.engine.get_processing_message(phone=msg.from_)
         self.client.messages.create(
@@ -100,9 +93,7 @@ class DevTwilioPoller:
             body=message,
             messaging_service_sid=os.getenv("TWILIO_MESSAGE_SERVICE_SID"),
         )
-        logger.info(
-            f"Response: {message}"
-        )
+        logger.info(f"Response: {message}")
 
     async def worker(self):
         while True:
@@ -144,7 +135,7 @@ class DevTwilioPoller:
                 new_messages.append(msg)
                 self.seen_messages.add(msg.sid)
         return new_messages
-    
+
     async def polling_loop(self):
         while True:
             new_msgs = self.poll_new_messages()
@@ -159,21 +150,19 @@ class DevTwilioPoller:
         # Construct a payload similar to what Twilio sends via webhook
         self.processing_numbers.add(msg.from_)
         try:
-            logger.info(
-                f"From: {msg.from_}, Body: {msg.body} \n"
-            )
+            logger.info(f"From: {msg.from_}, Body: {msg.body} \n")
             response = await self.engine.chat(phone=msg.from_, message=msg.body)
             self.client.messages.create(
                 to=msg.from_,
                 body=response.message,
                 messaging_service_sid=os.getenv("TWILIO_MESSAGE_SERVICE_SID"),
             )
-            logger.info(
-                f"Response: {response.model_dump_json(indent=2)}"
-            )
+            logger.info(f"Response: {response.model_dump_json(indent=2)}")
             self.ready_messages.add(msg.sid)
         except Exception as e:
-            logger.error(f"From: {msg.from_}, Body: {msg.body} \n    Error: {str(e)}", exc_info=True)
+            logger.error(
+                f"From: {msg.from_}, Body: {msg.body} \n    Error: {str(e)}", exc_info=True
+            )
         finally:
             self.processing_numbers.remove(msg.from_)
 

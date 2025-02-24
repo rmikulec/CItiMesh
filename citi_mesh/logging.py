@@ -6,7 +6,6 @@ def get_logger(name: str):
     logger = logging.getLogger(f"Director[{name}]")
     logger.setLevel(logging.DEBUG)
 
-
     # Create a console handler (optional)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
