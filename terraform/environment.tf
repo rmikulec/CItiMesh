@@ -28,17 +28,12 @@ data "azurerm_key_vault_secret" "twilio_api_key" {
   key_vault_id = data.azurerm_key_vault.citimesh_keyvault.id
 }
 
-data "azurerm_key_vault_secret" "twilio_account_code" {
-  name         = "twilio-account-code"
-  key_vault_id = data.azurerm_key_vault.citimesh_keyvault.id
-}
-
 data "azurerm_key_vault_secret" "twilio_account_sid" {
   name         = "twilio-account-sid"
   key_vault_id = data.azurerm_key_vault.citimesh_keyvault.id
 }
 
-data "azurerm_key_vault_secret" "twilio_code" {
-  name         = "twilio-code"
+data "azurerm_key_vault_secret" "twilio_auth_token" {
+  name         = "twilio-auth-token"
   key_vault_id = data.azurerm_key_vault.citimesh_keyvault.id
 }

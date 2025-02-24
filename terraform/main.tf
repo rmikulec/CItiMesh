@@ -98,9 +98,8 @@ resource "azurerm_app_service" "citimesh_app" {
     "DOCKER_REGISTRY_SERVER_URL"      = azurerm_container_registry.citimesh_registry.login_server
     "WEBSITES_ENABLE_APP_SERVICE_STORAGE" = "false"
     "OPENAI_API_KEY"                  = data.azurerm_key_vault_secret.openai_api_key.value
-    "TWILIO_CODE"                     = data.azurerm_key_vault_secret.twilio_code.value
+    "TWILIO_AUTH_TOKEN"               = data.azurerm_key_vault_secret.twilio_auth_token.value
     "TWILIO_ACCOUNT_SID"              = data.azurerm_key_vault_secret.twilio_account_sid.value
-    "TWILIO_ACCOUNT_TOKEN"            = data.azurerm_key_vault_secret.twilio_account_code.value
     "TWILIO_API_KEY"                  = data.azurerm_key_vault_secret.twilio_api_key.value
     "TWILIO_API_SECRET"               = data.azurerm_key_vault_secret.twilio_api_secret.value
     "TWILIO_NUMBER"                   = var.phone_number
