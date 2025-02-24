@@ -27,4 +27,4 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 COPY ./citi_mesh /code/citi_mesh
 
 # Serve the app using uvicorn
-CMD ["uvicorn", "citi_mesh.app:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "citi_mesh.app:app", "--host", "0.0.0.0", "--port", "80", "--log-level", "info"]

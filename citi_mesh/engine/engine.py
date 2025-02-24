@@ -3,10 +3,13 @@ import threading
 from typing import Type
 
 from citi_mesh.engine.system_message import INITIAL_MESSAGE, PROCESSING_MESSAGE
-from citi_mesh.engine.logistic_models import OpenAIOutput
+from citi_mesh.engine.analytic_models import OpenAIOutput
+from citi_mesh.logging import get_logger
 from citi_mesh.engine.messages import MessageTracker
 from citi_mesh.tools import CitiToolManager
 from citi_mesh.config import Config
+
+logger = get_logger(__name__)
 
 
 class CitiEngine:
@@ -27,6 +30,7 @@ class CitiEngine:
         if not cls._instance:
             with cls._lock:
                 if not cls._instance:
+                    logger.info("Starting up CitiEngine...")
                     cls._instance = cls()
                     cls._message_tracker = MessageTracker(
                         expiration_minutes=conversation_expiration

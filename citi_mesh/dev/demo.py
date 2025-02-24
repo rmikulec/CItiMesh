@@ -1,7 +1,7 @@
 from citi_mesh.logging import get_logger
 from citi_mesh.database.db_pool import DatabasePool
 from citi_mesh.database.crud import get_tenant_from_name
-from citi_mesh.engine.logistic_models import Analytic, OpenAIOutput
+from citi_mesh.engine.analytic_models import Analytic, OpenAIOutput
 from citi_mesh.tools import CitiToolManager
 
 
