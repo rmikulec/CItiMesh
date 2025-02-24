@@ -96,6 +96,8 @@ python-dotenv==1.0.1
     # via
     #   -r requirements.in
     #   pydantic-settings
+python-multipart==0.0.20
+    # via -r requirements.in
 pytz==2025.1
     # via pandas
 requests==2.32.3
