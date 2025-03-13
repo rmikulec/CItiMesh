@@ -13,6 +13,7 @@ from citi_mesh.database.resource import (
     ResourceTypeTable,
 )
 
+
 def create_tenant_with_resource_types(session: Session, tenant_data: Tenant) -> Tenant:
     """
     Creates a new Tenant (and any nested ResourceType objects) in the database
@@ -32,6 +33,7 @@ def create_tenant_with_resource_types(session: Session, tenant_data: Tenant) -> 
 
     # Convert back to Pydantic
     return Tenant.model_validate(tenant_orm, from_attributes=True)
+
 
 def create_provider_with_resources(session: Session, provider_data: Provider) -> Provider:
     """
@@ -53,6 +55,7 @@ def create_provider_with_resources(session: Session, provider_data: Provider) ->
 
     # Convert back to Pydantic
     return Provider.model_validate(provider_orm, from_attributes=True)
+
 
 def get_tenant_with_resource_types_and_providers(
     session: Session, tenant_id: str
@@ -103,6 +106,7 @@ def get_tenant_from_name(session: Session, tenant_name: str) -> Optional[Tenant]
     # Convert to Pydantic
     return Tenant.model_validate(tenant_orm, from_attributes=True)
 
+
 def get_all_resources_from_tenant(session: Session, tenant_id: str) -> List[Resource]:
     """
     Fetches all resources belonging to a given tenant,
@@ -112,6 +116,7 @@ def get_all_resources_from_tenant(session: Session, tenant_id: str) -> List[Reso
 
     return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
 
+
 def get_all_resources_from_provider(session: Session, provider_id: str) -> List[Resource]:
     """
     Fetches all resources belonging to a given provider,
@@ -120,6 +125,7 @@ def get_all_resources_from_provider(session: Session, provider_id: str) -> List[
     resources_orm = session.query(ResourceTable).filter_by(provider_id=provider_id).all()
 
     return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
+
 
 def get_all_resources_for_tenant_by_types(
     session: Session, tenant_id: str, resource_type_names: List[str]
@@ -139,6 +145,7 @@ def get_all_resources_for_tenant_by_types(
     )
 
     return [Resource.model_validate(r, from_attributes=True) for r in resources_orm]
+
 
 def get_all_resources_for_provider_by_types(
     session: Session, provider_id: str, resource_type_names: List[str]

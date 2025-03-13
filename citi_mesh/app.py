@@ -1,27 +1,26 @@
 import os
 import asyncio
-from fastapi import FastAPI, Request, Form, HTTPException, status
+from fastapi import FastAPI, Request, Form, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.responses import JSONResponse
 from contextlib import asynccontextmanager
 from twilio.twiml.messaging_response import MessagingResponse
-from twilio.request_validator import RequestValidator  
+from twilio.request_validator import RequestValidator
 
 from citi_mesh import __version__
 from citi_mesh.logging import get_logger
 from citi_mesh.engine import CitiEngine
+from citi_mesh.utils import send_message_twilio
 from citi_mesh.dev.demo import load_output_config, load_tools
 
 logger = get_logger(__name__)
 
+
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     logger.info("App starting...")
-    CitiEngine.get_instance(
-        output_model=load_output_config(),
-        tool_manager=load_tools()
-    )
+    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=load_tools())
 
     yield
 
@@ -40,6 +39,7 @@ app.add_middleware(
 # Example async functions that check dependencies.
 # Replace the contents of these functions with your actual health-check logic.
 
+
 async def check_database():
     try:
         # For example, perform a simple query or connection test.
@@ -48,6 +48,7 @@ async def check_database():
         return True
     except Exception as e:
         return False
+
 
 async def check_cache():
     try:
@@ -58,6 +59,7 @@ async def check_cache():
     except Exception as e:
         return False
 
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     # Run dependency checks concurrently.
@@ -66,7 +68,7 @@ async def health_check():
     # Build a status response for each dependency.
     components = {
         "database": "ok" if db_status else "error",
-        "cache": "ok" if cache_status else "error"
+        "cache": "ok" if cache_status else "error",
     }
 
     # Determine the overall health.
@@ -85,28 +87,37 @@ async def health_check():
 
 @app.post("/sms")
 async def sms(
-    request: Request, From: str = Form(...), Body: str = Form(...) 
+    request: Request,
+    background_tasks: BackgroundTasks,
+    From: str = Form(...),
+    Body: str = Form(...),
 ):
     validator = RequestValidator(os.environ["TWILIO_AUTH_TOKEN"])
     form_ = await request.form()
     logger.info(f"Message recieved from: {From}: {Body}")
     if not validator.validate(
-        str(request.url), 
-        form_, 
-        request.headers.get("X-Twilio-Signature", "")
+        str(request.url), form_, request.headers.get("X-Twilio-Signature", "")
     ):
         raise HTTPException(status_code=400, detail="Error in Twilio Signature")
 
 
-    engine_res = await CitiEngine.chat(
+    background_tasks.add_task(
+        send_message_twilio, 
+        to=From,
+        message_func=CitiEngine.get_processing_message, 
         phone=From,
         message=Body
     )
 
-    response = MessagingResponse()
-    logger.info(f"Message produced: {engine_res.message}", extra=engine_res.model_dump(exclude=['message']))
-    msg = response.message(engine_res.message)
-    return Response(content=str(response), media_type="application/xml")
+
+    background_tasks.add_task(
+        send_message_twilio,
+        to=From,
+        message_func=CitiEngine.chat,
+        phone=From,
+        message=Body
+    )
+
 
 if __name__ == "__main__":
     app.run(debug=True)

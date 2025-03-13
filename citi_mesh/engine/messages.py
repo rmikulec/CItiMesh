@@ -96,10 +96,14 @@ class MessageTracker:
         self.messages.clear()
 
     def get_conversation(self, phone: str) -> str:
-        conv_str = ""
-        for message in self.get(phone):
-            if message["role"] == "assistant":
-                conv_str += f"\n Assistant: {message['content']}"
-            elif message["role"] == "user":
-                conv_str += f"\n User: {message['content']}"
-        return conv_str
+        if phone not in self.messages:
+            return "Conversation just started"
+        else:
+            conv_str = ""
+            for message in self.get(phone):
+                if isinstance(message, dict):
+                    if message["role"] == "assistant":
+                        conv_str += f"\n Assistant: {message['content']}"
+                    elif message["role"] == "user":
+                        conv_str += f"\n User: {message['content']}"
+            return conv_str

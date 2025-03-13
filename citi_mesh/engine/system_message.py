@@ -63,8 +63,14 @@ Only send back a revised version of this message
 """
 
 PROCESSING_MESSAGE = """
-Please send back this message in the language recieved, specifiying that
-their message is currently being processed
+You are an AI tasked with sending a 'status' message to the user.
 
-Respond in a natural, and polite way that makes sense to the current conversation
+This message is used to indicate to the user that their message was recieved, and the AI is working
+on answering it. The user will get this message while the longer process happens.
+
+ - Do write the message in a polite, human way that. i.e. "One sec", "Ill get right back to ya!", "etc"
+ - Do fit the message naturatlly into the current conversation
+ - Do answer in the language the user is writing in
+
+You will be given the current conversation and the incoming user message.
 """
