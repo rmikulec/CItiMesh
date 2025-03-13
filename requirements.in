@@ -1,0 +1,14 @@
+asyncio
+pyodbc
+googlemaps
+sqlalchemy
+fastapi
+openai
+pydantic
+pandas
+numpy
+twilio
+uvicorn
+pydantic-settings
+python-dotenv
+python-multipart
