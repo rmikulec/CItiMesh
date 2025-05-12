@@ -4,7 +4,7 @@ import json
 import os
 import datetime
 
-from citi_mesh.tools.base import BaseCitimeshTool
+from citi_mesh.tools.base import CitimeshTool
 
 SYSTEM_MESSAGE = """You are an expert at interpreting results from the Google Maps API. 
 You are designated with the task of recieving raw JSON output from google maps directions API, 
@@ -12,7 +12,7 @@ and must effectively communicate to the user, in text, of how to navigate to the
 Keep in mind, that your result will eventually be sent to the user via SMS text message."""
 
 
-class GoogleMapsDirectionsTool(BaseCitimeshTool):
+class GoogleMapsDirectionsTool(CitimeshTool):
 
     def __init__(self, *args, **kwargs):
         super().__init__(

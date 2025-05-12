@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from citi_mesh.logging import get_logger
 from citi_mesh.utils import json_serializer
-from citi_mesh.tools.base import BaseCitimeshTool
+from citi_mesh.tools.base import CitimeshTool
 from citi_mesh.database.crud import (
     get_all_resources_for_tenant_by_types,
     get_all_resources_for_provider_by_types,
@@ -14,7 +14,7 @@ from citi_mesh.database.resource import Tenant
 logger = get_logger(__name__)
 
 
-class ResourceTool(BaseCitimeshTool):
+class ResourceTool(CitimeshTool):
 
     def __init__(
         self,

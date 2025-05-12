@@ -4,7 +4,7 @@ from citi_mesh.database.resource import Tenant
 from sqlalchemy.orm import Session
 
 
-class BaseCitimeshTool(ABC):
+class CitimeshTool(ABC):
 
     def __init__(
         self,

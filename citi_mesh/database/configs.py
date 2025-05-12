@@ -23,6 +23,7 @@ from citi_mesh.database.base import BaseTable, FromDBModel
 # --------------------------------------------------------------------
 class TenantTable(BaseTable):
     name = Column(String(length=32), unique=True, index=True)
+    display_name = Column(String(length=32), unique=True)
     registered_number = Column(String(length=17), unique=True)
     subdomain = Column(String(length=16), unique=True)
 
@@ -43,6 +44,7 @@ class TenantTable(BaseTable):
 
 class AnalyticConfig(BaseTable):
     name = Column(String(length=32), unique=True)
+    display_name = Column(String(length=32), unique=True)
     description = Column(Text)
     value_type = Column(String(length=16))
     

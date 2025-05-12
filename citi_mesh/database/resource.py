@@ -205,6 +205,7 @@ class Tenant(FromDBModel):
     __ormclass__ = TenantTable
 
     name: str
+    display_name: str
     registered_number: str
     subdomain: str
     created_at: datetime = Field(default=datetime.now())

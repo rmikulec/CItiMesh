@@ -40,11 +40,11 @@ a more structered format.
 Please do not include any data that is not in the original string
 Please do include all of the data that is in the string.
 """
+DatabasePool.get_instance()
 
-
-class BaseProvider(ABC):
+class Provider(ABC):
     """
-    Base Provider to be extending when creating a new type of 'source'
+    Provider to be extending when creating a new type of 'source'
     The BaseProvider handles sending in the data to openai and then syncing it
     to the SQL Database
 
@@ -65,7 +65,6 @@ class BaseProvider(ABC):
         self.name = name
         self.session = session
         self.client = openai.AsyncClient()
-        self.db_pool = DatabasePool.get_instance()
 
     @cached_property
     def tenant(self) -> Tenant:
@@ -93,15 +92,16 @@ class BaseProvider(ABC):
         # Loop through the openai generated resources and
         # using the Tenant, create the proper resources to
         # add to the Provider
-        for resource in openai_resources:
-            new_resource = self.tenant.create_resource_from_openai_resource(
-                openai_resource=resource, provider_id=provider.id
-            )
-            provider.resources.append(new_resource)
+        with DatabasePool.get_session() as session:
+            for resource in openai_resources:
+                new_resource = self.tenant.create_resource_from_openai_resource(
+                    openai_resource=resource, provider_id=provider.id
+                )
+                provider.resources.append(new_resource)
 
-        self.session.merge(provider.to_orm())
-        self.session.commit()
-        self.session.flush()
+            self.session.merge(provider.to_orm())
+            self.session.commit()
+            self.session.flush()
 
     async def _openai_parse(self, source_strings: list[str]) -> list[Resource]:
         """
@@ -160,7 +160,7 @@ class BaseProvider(ABC):
             return resources
 
 
-class WebpageProvider(BaseProvider):
+class WebpageProvider(Provider):
     """
     Provider class used to update the Resources DB with information
     from a given webpage
@@ -193,7 +193,7 @@ class WebpageProvider(BaseProvider):
         return [response.text]
 
 
-class CSVProvider(BaseProvider):
+class CSVProvider(Provider):
     """
     Provider class used to update the Resources DB with information
     from a given CSV File
