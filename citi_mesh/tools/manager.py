@@ -1,16 +1,14 @@
 from citi_mesh.tools.maps import GoogleMapsDirectionsTool
-from citi_mesh.tools.resources import ProviderTool
+from citi_mesh.tools.provider import ProviderTool
 from citi_mesh.logging import get_logger
 from enum import Enum
 from openai.types.chat import ParsedFunctionToolCall
 import json
 
-from citi_mesh.database.resource import Tenant
+from citi_mesh.database.models import Tenant
 from citi_mesh.database.db_pool import DatabasePool
 from sqlalchemy.orm import Session
 
-
-DatabasePool.get_instance()
 logger = get_logger(__name__)
 
 
@@ -57,7 +55,7 @@ class CitiToolManager:
     def to_openai(self):
         return [tool.to_openai() for tool in self.tools.values()]
 
-    def from_openai(self, tool_calls: list[ParsedFunctionToolCall]) -> list[dict[str, str]]:
+    def from_openai(self, tool_calls: list[ParsedFunctionToolCall], session: Session) -> list[dict[str, str]]:
         tool_messages = []
         for tool_call in tool_calls:
             logger.info(
@@ -71,8 +69,7 @@ class CitiToolManager:
                 args = {}
 
             try:
-                with DatabasePool.get_session() as session:
-                    tool_response = tool.call(session=session, **args)
+                tool_response = tool.call(session=session, **args)
                 logger.info(f"{tool.tool_name} Succeeded")
                 tool_messages.append(
                     {"role": "tool", "tool_call_id": tool_call.id, "content": tool_response}

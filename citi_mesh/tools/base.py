@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from citi_mesh.database.resource import Tenant
+from citi_mesh.database.models import Tenant
 from sqlalchemy.orm import Session
 
 

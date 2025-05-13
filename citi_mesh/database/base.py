@@ -2,12 +2,15 @@ import uuid
 import re
 
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, select
+from sqlalchemy.orm import Session, joinedload, selectinload, Load
+from sqlalchemy.orm.interfaces import MapperOption
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncAttrs
 from sqlalchemy.inspection import inspect
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
-from typing import Any, Optional
+from typing import Any, Optional, Union, Self, AsyncGenerator
 
 
 def to_snake_case(name: str) -> str:
@@ -19,7 +22,7 @@ def to_snake_case(name: str) -> str:
 Base = declarative_base()
 
 
-class BaseTable(Base):
+class BaseTable(Base, AsyncAttrs):
     __abstract__ = True
 
     id = Column(String(length=128), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -35,6 +38,57 @@ class FromDBModel(BaseModel):
     id: SkipJsonSchema[str] = Field(default_factory=lambda: str(uuid.uuid4()))
 
     model_config = ConfigDict(from_attributes=True)
+        
+
+    @staticmethod
+    def _build_load_options(
+        orm_cls: type,
+        max_depth: int,
+        *,
+        _current_depth: int = 0,
+        _seen: set[type] | None = None,
+    ) -> list:
+        if _current_depth >= max_depth:
+            return []
+        seen = set() if _seen is None else _seen
+        # don't re‑visit the same class
+        if orm_cls in seen:
+            return []
+        seen.add(orm_cls)
+
+        opts: list = []
+        mapper = inspect(orm_cls)
+        for rel in mapper.relationships:
+            loader = selectinload(getattr(orm_cls, rel.key))
+            # recurse, passing along our growing “seen” set
+            nested = FromDBModel._build_load_options(
+                rel.mapper.class_,
+                max_depth,
+                _current_depth=_current_depth + 1,
+                _seen=seen,
+            )
+            if nested:
+                loader = loader.options(*nested)
+            opts.append(loader)
+
+        return opts
+
+    @classmethod
+    async def afrom_id(cls, session: AsyncSession, id_: str) -> AsyncGenerator[Self]:
+        load_opts = cls._build_load_options(cls.__ormclass__, 2)
+        stmt = (
+            select(cls.__ormclass__)
+            .options(*load_opts)
+            .where(cls.__ormclass__.id == id_)
+        )
+        instance = (await session.execute(stmt)).scalar_one_or_none()
+        return cls.model_validate(instance)
+
+
+    @classmethod
+    def from_id(cls, session: Session, id_: str):
+        instance = session.query(cls.__ormclass__).filter(cls.__ormclass__.id==id_).first()
+        return cls.model_validate(instance)
 
     def check_orm_fields(self, field_name) -> bool:
         mapper = inspect(self.__ormclass__)

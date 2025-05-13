@@ -8,7 +8,7 @@ from sqlalchemy import MetaData
 from citi_mesh.config import Config
 from citi_mesh.database.db_pool import DatabasePool
 from citi_mesh.database.base import BaseTable
-from citi_mesh.database import resource
+from citi_mesh.database.models import Tenant
 
 logger = logging.getLogger("uvicorn")
 logger.setLevel(logging.DEBUG)
@@ -42,7 +42,7 @@ def setup_db(reset_db: bool = True, is_dev:bool = False):
         demo_tenant_json = json.loads(
             pathlib.Path("/Users/ryan/projects/CitiMesh/demo_tenant.json").read_text()
         )
-        demo_tenant = resource.Tenant.model_validate(demo_tenant_json)
+        demo_tenant = Tenant.model_validate(demo_tenant_json)
         session.add(demo_tenant.to_orm())
         # Add tables here
         session.commit()
