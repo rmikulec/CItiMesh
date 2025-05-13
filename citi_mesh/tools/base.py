@@ -12,12 +12,10 @@ class CitimeshTool(ABC):
         tool_desc: str,
         args: dict,
         tenant: Tenant = None,
-        session: Session = None,
     ):
         self.tool_name = tool_name
         self.tool_desc = tool_desc
         self.tenant = tenant
-        self.session = session
         self.args = args
 
     def to_openai(self):
@@ -38,5 +36,5 @@ class CitimeshTool(ABC):
         }
 
     @abstractmethod
-    def call(self, *args, **kwargs) -> str:
+    def call(self, session: Session, *args, **kwargs) -> str:
         pass

@@ -10,16 +10,20 @@ from citi_mesh.database.crud import (
     get_all_resources_for_provider_by_types,
 )
 from citi_mesh.database.resource import Tenant
+from citi_mesh.database.resource import Provider
 
 logger = get_logger(__name__)
 
 
-class ResourceTool(CitimeshTool):
+class ProviderTool(CitimeshTool):
+    """
+    Allows CitiEngine to access data from a Provider.
+    """
 
     def __init__(
         self,
         tenant: Tenant,
-        session: Session,
+        provider: Provider,
         use_provider_names: bool = False,
         require_resource_type: bool = True,
         require_provider_name: bool = False,
@@ -32,7 +36,7 @@ class ResourceTool(CitimeshTool):
             resource_types.extend("n/a")
 
         args = {
-            "service_types": {
+            provider.name: {
                 "type": "array",
                 "items": {
                     "type": "string",
@@ -59,9 +63,8 @@ class ResourceTool(CitimeshTool):
             args=args,
         )
         self.tenant = tenant
-        self.session = session
 
-    def call(self, service_types: list[str], provider_name: str = None) -> str:
+    def call(self, session: Session, service_types: list[str], provider_name: str = None) -> str:
         logger.info(f"TenantID from tool: {self.tenant.id}")
         if provider_name:
             resources = get_all_resources_for_provider_by_types(

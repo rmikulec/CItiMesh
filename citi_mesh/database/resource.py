@@ -26,6 +26,7 @@ from citi_mesh.database.base import BaseTable, FromDBModel
 # --------------------------------------------------------------------
 class TenantTable(BaseTable):
     name = Column(String(length=32), unique=True, index=True)
+    display_name = Column(String(length=32), unique=True)
     registered_number = Column(String(length=17), unique=True)
     subdomain = Column(String(length=16), unique=True)
 
@@ -35,10 +36,7 @@ class TenantTable(BaseTable):
     # Relationships
     providers = relationship(
         "ProviderTable", back_populates="tenant", cascade="all, delete-orphan"
-    )
-    resource_types = relationship(
-        "ResourceTypeTable", back_populates="tenant", cascade="all, delete-orphan"
-    )
+    )    
     resources = relationship(
         "ResourceTable", back_populates="tenant", cascade="all, delete-orphan"
     )
@@ -59,10 +57,13 @@ class ProviderTable(BaseTable):
     resources = relationship(
         "ResourceTable", back_populates="provider", cascade="all, delete-orphan"
     )
+    resource_types = relationship(
+        "ResourceTypeTable", back_populates=None, cascade="all, delete-orphan"
+    )
 
 
 class ResourceTypeTable(BaseTable):
-    tenant_id = Column(String(length=128), ForeignKey("tenant.id"))
+    provider_id = Column(String(length=128), ForeignKey("provider.id"))
     name = Column(String(length=64))
     display_name = Column(String)  # formerly "name_pretty"
 
@@ -70,11 +71,8 @@ class ResourceTypeTable(BaseTable):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (
-        Index("idx_resource_type_tenant_id_name", "tenant_id", "name", unique=False),
+        Index("idx_resource_type_provider_id_name", "provider_id", "name", unique=False),
     )
-
-    # Relationships
-    tenant = relationship("TenantTable", back_populates="resource_types")
 
     # Many-to-many link back to resources
     resources = relationship(
@@ -164,24 +162,12 @@ class Address(FromDBModel):
 class ResourceType(FromDBModel):
     __ormclass__ = ResourceTypeTable
 
-    tenant_id: str
+    provider_id: str
     name: str
     display_name: str
     created_at: datetime = Field(default=datetime.now())
     updated_at: datetime = Field(default=datetime.now())
 
-
-class Provider(FromDBModel):
-    __ormclass__ = ProviderTable
-
-    tenant_id: str
-    name: str
-    provider_type: str
-    created_at: datetime = Field(default=datetime.now())
-    updated_at: datetime = Field(default=datetime.now())
-
-    # Relationship: resources
-    resources: List["Resource"] = Field(default_factory=list)
 
 
 class Resource(FromDBModel):
@@ -201,38 +187,20 @@ class Resource(FromDBModel):
     resource_types: List[ResourceType] = Field(default_factory=list)
 
 
-class Tenant(FromDBModel):
-    __ormclass__ = TenantTable
+class Provider(FromDBModel):
+    __ormclass__ = ProviderTable
 
+    tenant_id: str
     name: str
     display_name: str
-    registered_number: str
-    subdomain: str
+    provider_type: str
     created_at: datetime = Field(default=datetime.now())
     updated_at: datetime = Field(default=datetime.now())
 
-    resource_types: List[ResourceType] = Field(default_factory=list)
-    providers: List[Provider] = Field(default_factory=list)
-    resources: List[Resource] = Field(default_factory=list)
+    # Relationship: resources
+    resources: List["Resource"] = Field(default_factory=list)
+    resource_types: List["ResourceType"] = Field(default_factory=list)
 
-    def create_resource_openai_class(self):
-        # Build Enum
-        enum_name = "ResourceTypeEnum"
-        type_map = {rt.name.upper().replace(" ", "_"): rt.name for rt in self.resource_types}
-        ResourceTypeEnum = Enum(enum_name, type_map, type=str)
-
-        # Define the fields you want (omitting id, tenant_id, etc.).
-        OpenAIResource = create_model(
-            "OpenAIResource",
-            name=(str, ...),
-            description=(str, ...),
-            phone_number=(Optional[str], None),
-            website=(Optional[str], None),
-            address=(Optional[Address], None),
-            resource_types=(List[ResourceTypeEnum], Field(default_factory=list)),
-        )
-
-        return OpenAIResource
 
     def create_resource_from_openai_resource(
         self, openai_resource: "ResourceOpenAI", provider_id: str
@@ -273,6 +241,21 @@ class Tenant(FromDBModel):
 
     def get_resource_type(self, type_name):
         return list(filter(lambda rtype: rtype.name == type_name, self.resource_types))[0]
+
+
+class Tenant(FromDBModel):
+    __ormclass__ = TenantTable
+
+    name: str
+    display_name: str
+    registered_number: str
+    subdomain: str
+    created_at: datetime = Field(default=datetime.now())
+    updated_at: datetime = Field(default=datetime.now())
+
+    providers: List[Provider] = Field(default_factory=list)
+    resources: List[Resource] = Field(default_factory=list)
+
 
     def get_provider(self, provider_name: str):
         return list(filter(lambda provider: provider.name == provider_name, self.providers))[0]

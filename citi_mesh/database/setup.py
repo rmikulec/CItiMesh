@@ -14,11 +14,14 @@ logger = logging.getLogger("uvicorn")
 logger.setLevel(logging.DEBUG)
 
 
-def setup_db(reset_db: bool = True):
+def setup_db(reset_db: bool = True, is_dev:bool = False):
 
     if not DatabasePool._instance:
 
-        DatabasePool.get_instance(Config.default_database_connection_url)
+        if is_dev :
+            DatabasePool.get_instance(connection_url="sqlite:///dev.db")
+        else:
+            DatabasePool.get_instance(connection_url=Config.default_database_connection_url)
 
     if reset_db:
         # Create a MetaData instance

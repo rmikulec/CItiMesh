@@ -51,6 +51,7 @@ class DatabasePool:
                         raise ValueError(
                             "Connection URL must be provided for the first initialization."
                         )
+                    print(connection_url)
                     cls._instance = cls()
                     cls._engine = create_engine(
                         url=connection_url,

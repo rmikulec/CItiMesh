@@ -6,27 +6,40 @@ import json
 import pandas as pd
 import numpy as np
 from abc import abstractmethod, ABC
-from pydantic import BaseModel, create_model
-from functools import cached_property
+from pydantic import BaseModel, create_model, Field
+from functools import lru_cache
 from typing import Union, Optional, Literal
 from sqlalchemy.orm import Session
 from enum import Enum
 
 from citi_mesh.database.crud import get_tenant_from_name
-from citi_mesh.database.resource import Resource, Provider, Tenant
-from citi_mesh.database.db_pool import DatabasePool
+from citi_mesh.database.resource import Resource, Tenant, ResourceType, Address
+from citi_mesh.database.resource import Provider as Base
 from citi_mesh.config import Config
 
 
-def create_resource_list_model(tenant: Tenant):
+def create_resource_list_model(resource_types: list[tuple[str, str]]):
     """
     Return a pydantic model class that has a single field:
     `resources: List[DynamicResource]`
     where `DynamicResource` is the subclass generated from resource_types.
     """
-    DynamicResource = tenant.create_resource_openai_class()
+    enum_name = "ResourceTypeEnum"
+    type_map = {rt[0].upper().replace(" ", "_"): rt[0] for rt in resource_types}
+    ResourceTypeEnum = Enum(enum_name, type_map, type=str)
 
-    ResourceList = create_model("ResourceList", resources=(list[DynamicResource], ...))
+    # Define the fields you want (omitting id, tenant_id, etc.).
+    OpenAIResource = create_model(
+        "OpenAIResource",
+        name=(str, ...),
+        description=(str, ...),
+        phone_number=(Optional[str], None),
+        website=(Optional[str], None),
+        address=(Optional[Address], None),
+        resource_types=(list[ResourceTypeEnum], Field(default_factory=list)),
+    )
+
+    ResourceList = create_model("ResourceList", resources=(list[OpenAIResource], ...))
 
     return ResourceList
 
@@ -40,7 +53,6 @@ a more structered format.
 Please do not include any data that is not in the original string
 Please do include all of the data that is in the string.
 """
-DatabasePool.get_instance()
 
 class Provider(ABC):
     """
@@ -58,17 +70,18 @@ class Provider(ABC):
         a more structured response. This function *must* return list[str]
     """
 
-    __source_type__ = "base"
+    __provider_type__ = "base"
 
-    def __init__(self, tenant_name: str, name: str, session: Session):
+    def __init__(self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str]):
         self.tenant_name = tenant_name
         self.name = name
-        self.session = session
+        self.display_name = display_name
+        self.types_ = types_
         self.client = openai.AsyncClient()
 
-    @cached_property
-    def tenant(self) -> Tenant:
-        return get_tenant_from_name(session=self.session, tenant_name=self.tenant_name)
+    @lru_cache
+    def _get_tenant(self, session: Session) -> Tenant:
+        return get_tenant_from_name(session=session, tenant_name=self.tenant_name)
 
     @abstractmethod
     def _parse_source(self) -> list[str]:
@@ -76,32 +89,41 @@ class Provider(ABC):
         # openai to parse resources from
         pass
 
-    def _sync_to_db(self, openai_resources: list[Resource]):
+    def _sync_to_db(self, openai_resources: list[Resource], session: Session):
         """
         Private method to sync resources to the SQL Database
         """
 
         # Create the new provider with empty resources
-        provider = Provider(
-            tenant_id=self.tenant.id,
+        provider = Base(
+            tenant_id=self._get_tenant(session).id,
             name=self.name,
-            provider_type=self.__source_type__,
+            display_name=self.display_name,
+            provider_type=self.__provider_type__,
             resources=[],
+            resource_types=[]
         )
+        for type_ in self.types_:
+            provider.resource_types.append(
+                ResourceType(
+                    provider_id=provider.id,
+                    name=type_[0],
+                    display_name=type_[1]
+                )
+            )
 
         # Loop through the openai generated resources and
         # using the Tenant, create the proper resources to
         # add to the Provider
-        with DatabasePool.get_session() as session:
-            for resource in openai_resources:
-                new_resource = self.tenant.create_resource_from_openai_resource(
-                    openai_resource=resource, provider_id=provider.id
-                )
-                provider.resources.append(new_resource)
+        for resource in openai_resources:
+            new_resource = provider.create_resource_from_openai_resource(
+                openai_resource=resource, provider_id=provider.id
+            )
+            provider.resources.append(new_resource)
 
-            self.session.merge(provider.to_orm())
-            self.session.commit()
-            self.session.flush()
+        session.merge(provider.to_orm())
+        session.commit()
+        session.flush()
 
     async def _openai_parse(self, source_strings: list[str]) -> list[Resource]:
         """
@@ -120,7 +142,7 @@ class Provider(ABC):
                     {"role": "system", "content": SYSTEM_MESSAGE},
                     {"role": "user", "content": "\n".join(source_strings)},
                 ],
-                response_format=create_resource_list_model(self.tenant),
+                response_format=create_resource_list_model(self.types_),
             )
 
             resources = completion.choices[0].message.parsed.resources
@@ -130,7 +152,7 @@ class Provider(ABC):
             return []
 
     async def pull_resources(
-        self, debug: bool = False, chunk_size: int = 20
+        self, session: Session, debug: bool = False, chunk_size: int = 20
     ) -> Optional[list[Resource]]:
         """
         Pulls resources out of the original source and syncs them to the database
@@ -140,7 +162,7 @@ class Provider(ABC):
             of Resources instead. Defaults to False.
           - chunk_size: The size of each sublist that is sent over to openai. The bigger
             the chunk size, the faster it will run, but may result in lower accuracy.
-            Defaults to 25.
+            Defaults to 20.
         """
         source_data = self._parse_source()
 
@@ -149,13 +171,13 @@ class Provider(ABC):
         ]
 
         openai_results = await asyncio.gather(
-            *[self._openai_parse(source_strings=source_str) for source_str in chunked_data]
+            *[self._openai_parse(source_strings=source_strings) for source_strings in chunked_data]
         )
 
         resources = sum(openai_results, [])
 
         if not debug:
-            self._sync_to_db(resources)
+            self._sync_to_db(resources, session=session)
         else:
             return resources
 
@@ -171,11 +193,11 @@ class WebpageProvider(Provider):
       - url: The url of the webpage where the information is located
     """
 
-    __source_type__ = "webpage"
+    __provider_type__ = "webpage"
 
-    def __init__(self, tenant_name: str, name: str, session: Session, url: str):
+    def __init__(self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str], url: str):
         self.url = url
-        super().__init__(tenant_name=tenant_name, name=name, session=session)
+        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, types_=types_)
 
     def _parse_source(self):
         """
@@ -204,13 +226,13 @@ class CSVProvider(Provider):
       - csv_path: The path to the csv containing the information
     """
 
-    __source_type__ = "csv_file"
+    __provider_type__ = "csv_file"
 
     def __init__(
-        self, tenant_name: str, name: str, session: Session, csv_path: Union[str, pathlib.Path]
+        self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str], csv_path: Union[str, pathlib.Path]
     ):
         self.csv_path = pathlib.Path(csv_path)
-        super().__init__(tenant_name=tenant_name, name=name, session=session)
+        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, types_=types_)
 
     def _parse_source(self):
         """
