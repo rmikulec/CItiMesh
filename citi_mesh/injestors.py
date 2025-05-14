@@ -13,8 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from enum import Enum
 
 from citi_mesh.database._tables import TenantTable
-from citi_mesh.database.models import Resource, Tenant, ResourceType, Address
-from citi_mesh.database.models import Provider as Base
+from citi_mesh.database._models import Resource, Address, Repository, Source
 from citi_mesh.config import Config
 
 
@@ -54,48 +53,32 @@ Please do not include any data that is not in the original string
 Please do include all of the data that is in the string.
 """
 
-class Provider(ABC):
+class Injestor(ABC):
     """
-    Provider to be extending when creating a new type of 'source'
-    The BaseProvider handles sending in the data to openai and then syncing it
+    Injestors take in a form of data, a respository, and creates new resources based on that
+
+    Injestor to be extending when creating a new type of 'repository'
+    The base Injestor handles sending in the data to openai and then syncing it
     to the SQL Database
 
     To extend, the following must be implemented:
       - __init__(): The constructor can be used to introduce any new
         attributes that may be used when parsing the data. The class
-        must send over a tenant_name and name to the BaseProvider when
+        must send over a tenant_name and name to the BaseRepository when
         initializing
       - _parse_source(): This function must use any class attributes to
         create a list of strings that will later be sent to openai to pull out
         a more structured response. This function *must* return list[str]
     """
 
-    __provider_type__ = "base"
+    __repository_type__ = "base"
 
     def __init__(self, 
-        tenant_name: str, 
-        name: str, 
-        display_name: str,
-        tool_description: str,
-        types_: tuple[str, str]
+        repo: Repository,
     ):
-        self.tenant_name = tenant_name
-        self.name = name
-        self.display_name = display_name
-        self.tool_description = tool_description
-        self.types_ = types_
+        self.repo = repo
         self.client = openai.AsyncClient()
-
-    async def _get_tenant_id(self, session: AsyncSession) -> Tenant:
-        stmt = (
-             select(TenantTable).where(TenantTable.name == self.tenant_name)
-        )
-        instance = (await session.execute(stmt)).scalar_one_or_none()
-
-        if not instance:
-            raise Exception(f"Tenant: {self.tenant_name} not found")
-    
-        return instance.id
+        self.details = None
 
     @abstractmethod
     def _parse_source(self) -> list[str]:
@@ -107,36 +90,22 @@ class Provider(ABC):
         """
         Private method to sync resources to the SQL Database
         """
-
-        # Create the new provider with empty resources
-        provider = Base(
-            tenant_id=(await self._get_tenant_id(session)),
-            name=self.name,
-            display_name=self.display_name,
-            tool_description=self.tool_description,
-            provider_type=self.__provider_type__,
-            resources=[],
-            resource_types=[]
+        source = Source(
+            repository_id=self.repo.id,
+            source_type=self.__repository_type__,
+            details=self.details
         )
-        for type_ in self.types_:
-            provider.resource_types.append(
-                ResourceType(
-                    provider_id=provider.id,
-                    name=type_[0],
-                    display_name=type_[1]
-                )
-            )
+        await session.merge(source.to_orm())
 
         # Loop through the openai generated resources and
         # using the Tenant, create the proper resources to
-        # add to the Provider
+        # add to the Repository
         for resource in openai_resources:
-            new_resource = provider.create_resource_from_openai_resource(
-                openai_resource=resource, provider_id=provider.id
+            new_resource = self.repo.create_resource_from_openai_resource(
+                openai_resource=resource
             )
             await session.merge(new_resource.to_orm())
-        
-        await session.merge(provider.to_orm())
+
         await session.commit()
         await session.flush()
 
@@ -157,7 +126,12 @@ class Provider(ABC):
                     {"role": "system", "content": SYSTEM_MESSAGE},
                     {"role": "user", "content": "\n".join(source_strings)},
                 ],
-                response_format=create_resource_list_model(self.types_),
+                response_format=create_resource_list_model(
+                    resource_types=[
+                        (t.name, t.display_name)
+                        for t in self.repo.resource_types
+                    ]
+                ),
             )
 
             resources = completion.choices[0].message.parsed.resources
@@ -197,29 +171,26 @@ class Provider(ABC):
             return resources
 
 
-class WebpageProvider(Provider):
+class WebpageInjestor(Injestor):
     """
-    Provider class used to update the Resources DB with information
+    Repository class used to update the Resources DB with information
     from a given webpage
 
     Attributes:
       - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular provider (i.e. NYC Open Data)
+      - name: The name of this particular repository (i.e. NYC Open Data)
       - url: The url of the webpage where the information is located
     """
 
-    __provider_type__ = "webpage"
+    __repository_type__ = "webpage"
 
     def __init__(self,
-        tenant_name: str, 
-        name: str, 
-        display_name: str,
-        tool_description: str,
-        types_: tuple[str, str], 
-        url: str
+        repo: Repository,
+        url: str,
     ):
         self.url = url
-        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, tool_description=tool_description, types_=types_)
+        super().__init__(repo=repo)
+        self.details = url
 
     def _parse_source(self):
         """
@@ -237,30 +208,27 @@ class WebpageProvider(Provider):
         return [response.text]
 
 
-class CSVProvider(Provider):
+class CSVInjestor(Injestor):
     """
-    Provider class used to update the Resources DB with information
+    Repository class used to update the Resources DB with information
     from a given CSV File
 
     Attributes:
       - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular provider (i.e. NYC Open Data)
+      - name: The name of this particular repository (i.e. NYC Open Data)
       - csv_path: The path to the csv containing the information
     """
 
-    __provider_type__ = "csv_file"
+    __repository_type__ = "csv_file"
 
     def __init__(
-        self, 
-        tenant_name: str, 
-        name: str, 
-        display_name: str, 
-        tool_description: str,
-        types_: tuple[str, str], 
-        csv_path: Union[str, pathlib.Path]
+        self,
+        repo: Repository,
+        csv_path: Union[str, pathlib.Path],
     ):
         self.csv_path = pathlib.Path(csv_path)
-        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, tool_description=tool_description, types_=types_)
+        super().__init__(repo=repo)
+        self.details = self.csv_path.stem
 
     def _parse_source(self):
         """

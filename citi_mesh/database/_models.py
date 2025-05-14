@@ -11,10 +11,10 @@ from pydantic import Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from citi_mesh.database import _tables
-from citi_mesh.database.base import FromDBModel
+from citi_mesh.database._base import SQLModel
 
 
-class Address(FromDBModel):
+class Address(SQLModel):
     __ormclass__ = _tables.AddressTable
 
     street: str
@@ -42,20 +42,20 @@ class Address(FromDBModel):
         return self
 
 
-class ResourceType(FromDBModel):
+class ResourceType(SQLModel):
     __ormclass__ = _tables.ResourceTypeTable
 
     name: str
     display_name: str
 
-    provider_id: SkipJsonSchema[str] = None
+    repository_id: SkipJsonSchema[str] = None
 
 
-class Resource(FromDBModel):
+class Resource(SQLModel):
     __ormclass__ = _tables.ResourceTable
 
     tenant_id: str
-    provider_id: Optional[str] = None
+    repository_id: Optional[str] = None
     name: str
     description: str
     phone_number: Optional[str] = None
@@ -66,16 +66,15 @@ class Resource(FromDBModel):
     resource_types: List[ResourceType] = Field(default_factory=list)
 
 
-class Provider(FromDBModel):
-    __ormclass__ = _tables.ProviderTable
+class Repository(SQLModel):
+    __ormclass__ = _tables.RepositoryTable
 
+    tenant_id: str = None
     name: str
     display_name: str
     tool_description: str
 
     # Fields to not sure on request payload
-    tenant_id: SkipJsonSchema[str] = None
-    provider_type: SkipJsonSchema[str] = None
 
     # Relationship: resources
     resource_types: List["ResourceType"] = Field(default_factory=list)
@@ -86,7 +85,7 @@ class Provider(FromDBModel):
         )[0]
 
     def create_resource_from_openai_resource(
-        self, openai_resource: "ResourceOpenAI", provider_id: str
+        self, openai_resource: "ResourceOpenAI"
     ) -> Resource:
         """
         Given an instance of the dynamically generated ResourceOpenAI (with enum-based resource_types),
@@ -112,7 +111,7 @@ class Provider(FromDBModel):
         # Build a new Resource referencing this tenant, using the openai_resource fields
         resource = Resource(
             tenant_id=self.id,
-            provider_id=provider_id,
+            repository_id=self.id,
             name=openai_resource.name,
             description=openai_resource.description,
             phone_number=openai_resource.phone_number,
@@ -130,7 +129,7 @@ class Provider(FromDBModel):
             .options(*load_opts)
             .join(_tables.ResourceTypeLinkTable, _tables.ResourceTypeLinkTable.resource_id == _tables.ResourceTable.id)
             .join(_tables.ResourceTypeTable, _tables.ResourceTypeTable.id == _tables.ResourceTypeLinkTable.resource_type_id)
-            .where((_tables.ResourceTypeTable.name.in_(resource_types) & (_tables.ResourceTable.provider_id==self.id)))
+            .where((_tables.ResourceTypeTable.name.in_(resource_types) & (_tables.ResourceTable.repository_id==self.id)))
         )
         instances = (await session.execute(stmt)).scalars()
 
@@ -140,7 +139,14 @@ class Provider(FromDBModel):
         ]
 
 
-class Tenant(FromDBModel):
+class Source(SQLModel):
+    __ormclass__ = _tables.SourceTable
+    repository_id: str
+    source_type: str
+    details: str
+
+
+class Tenant(SQLModel):
     __ormclass__ = _tables.TenantTable
 
     name: str
@@ -148,7 +154,7 @@ class Tenant(FromDBModel):
     registered_number: str
     subdomain: str
 
-    providers: List[Provider] = Field(default_factory=list)
+    repositorys: List[SQLModel] = Field(default_factory=list)
 
-    def get_provider(self, provider_name: str):
-        return list(filter(lambda provider: provider.name == provider_name, self.providers))[0]
+    def get_repository(self, repository_name: str):
+        return list(filter(lambda repository: repository.name == repository_name, self.repositorys))[0]

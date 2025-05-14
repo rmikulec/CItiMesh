@@ -15,10 +15,11 @@ from twilio.request_validator import RequestValidator
 from citi_mesh import __version__
 from citi_mesh.logging import get_logger
 from citi_mesh.engine import CitiEngine
-from citi_mesh.data.provider import CSVProvider, WebpageProvider
+from citi_mesh.injestors import CSVInjestor, WebpageInjestor
 from citi_mesh.utils import send_message_twilio
 from citi_mesh.dev.demo import load_output_config, load_tools
-from citi_mesh.database.models import Provider
+from citi_mesh.database import _models
+from citi_mesh.database.route_factory import RouteFactor
 from citi_mesh.database.session import get_session_dependency
 
 logger = get_logger(__name__)
@@ -43,6 +44,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+route_factory = RouteFactor(app)
+route_factory.add_routes(_models.Tenant)
+route_factory.add_routes(_models.Repository)
+route_factory.add_routes(_models.ResourceType)
+route_factory.add_routes(_models.Resource)
 
 # Example async functions that check dependencies.
 # Replace the contents of these functions with your actual health-check logic.
@@ -93,7 +99,7 @@ async def health_check():
         )
 
 
-@app.post("/sms", tags=['webhooks'])
+@app.post("/sms", tags=['Webhooks'])
 async def sms(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -127,28 +133,16 @@ async def sms(
     )
 
 
-
-class ProviderSubmissionResponse(BaseModel):
-    pass
-
-
-@app.post("/provider/web/{tenant_name}", tags=['provider'])
-async def post_webpage_provider(
-    tenant_name: str, 
-    webpage: str, 
-    provider: Provider, 
+@app.post("/repository/{repository_id}/web", tags=['Repository'])
+async def post_webpage_repository(
+    repository_id: str,
+    url: str, 
     session= Depends(get_session_dependency)
 ):
-    repo = WebpageProvider(
-        tenant_name=tenant_name,
-        name=provider.name,
-        display_name=provider.display_name,
-        tool_description=provider.tool_description,
-        types_=[
-            (t.name, t.display_name)
-            for t in provider.resource_types
-        ],
-        url=webpage
+    repo = await _models.Repository.from_id(session=session, id_=repository_id)
+    repo = WebpageInjestor(
+        repo=repo,
+        url=url
     )
 
     await repo.pull_resources(session)
@@ -156,18 +150,13 @@ async def post_webpage_provider(
     return status.HTTP_200_OK
 
 
-@app.post("/provider/csv/{tenant_name}", tags=['provider'])
-async def post_csv_provider(
-    tenant_name: str,
-    provider: str = Form(..., description="Provider metadata"),
+@app.post("/repository/{repository_id}/csv", tags=['Repository'])
+async def post_csv_repository(
+    repository_id: str,
     csv_file: UploadFile = File(..., description="CSV file containing resources."),
     session = Depends(get_session_dependency)
 ):
-    try:
-        meta = Provider.model_validate_json(provider)
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=e.errors())
-
+    repo = await _models.Repository.from_id(session=session, id_=repository_id)
     # 2. Read & parse the CSV
     contents = await csv_file.read()
     text = contents.decode("utf-8")
@@ -177,16 +166,8 @@ async def post_csv_provider(
         temp_path = pathlib.Path(temp_dir) / "temp.csv"
         df.to_csv(temp_path)
 
-        repo = CSVProvider(
-            tenant_name=tenant_name,
-            csv_path=temp_path,
-            name=meta.name,
-            display_name=meta.display_name,
-            tool_description=meta.tool_description,
-            types_=[
-                (t.name, t.display_name)
-                for t in meta.resource_types
-            ],
+        repo = CSVInjestor(
+            repo_id=repository_id
         )
 
         await repo.pull_resources(session=session)

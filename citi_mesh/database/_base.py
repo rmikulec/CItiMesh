@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.json_schema import SkipJsonSchema
 from typing import Any, Optional, Union, Self, AsyncGenerator
 
+from citi_mesh.database._exceptions import InstanceNotFound
+
 
 def to_snake_case(name: str) -> str:
     # Find all positions where an uppercase letter is preceded by a lowercase letter or followed by a lowercase letter.
@@ -22,7 +24,7 @@ def to_snake_case(name: str) -> str:
 Base = declarative_base()
 
 
-class BaseTable(Base, AsyncAttrs):
+class SQLTable(Base, AsyncAttrs):
     __abstract__ = True
 
     id = Column(String(length=128), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -35,7 +37,7 @@ class BaseTable(Base, AsyncAttrs):
         cls.__tablename__ = cls.__tablename__.removesuffix("_table")
 
 
-class FromDBModel(BaseModel):
+class SQLModel(BaseModel):
     __ormclass__ = None
     id: SkipJsonSchema[str] = Field(default_factory=lambda: str(uuid.uuid4()))
     created_at: SkipJsonSchema[datetime] = Field(default=datetime.now(timezone.utc))
@@ -65,7 +67,7 @@ class FromDBModel(BaseModel):
         for rel in mapper.relationships:
             loader = selectinload(getattr(orm_cls, rel.key))
             # recurse, passing along our growing “seen” set
-            nested = FromDBModel._build_load_options(
+            nested = SQLModel._build_load_options(
                 rel.mapper.class_,
                 max_depth,
                 _current_depth=_current_depth + 1,
@@ -78,7 +80,7 @@ class FromDBModel(BaseModel):
         return opts
 
     @classmethod
-    async def from_id(cls, session: AsyncSession, id_: str) -> AsyncGenerator[Self]:
+    async def from_id(cls, session: AsyncSession, id_: str) -> Self:
         load_opts = cls._build_load_options(cls.__ormclass__, 2)
         stmt = (
             select(cls.__ormclass__)
@@ -86,6 +88,10 @@ class FromDBModel(BaseModel):
             .where(cls.__ormclass__.id == id_)
         )
         instance = (await session.execute(stmt)).scalar_one_or_none()
+
+        if not instance:
+            raise InstanceNotFound(id_=id_, model=cls.__name__)
+
         return cls.model_validate(instance)
 
 
@@ -123,7 +129,7 @@ class FromDBModel(BaseModel):
             value = getattr(self, field_name)
 
             if hasattr(self.__ormclass__, field_name):
-                if isinstance(value, FromDBModel):
+                if isinstance(value, SQLModel):
                     # Pass the current object's id to its child as the parent_id
                     orm_fields[field_name] = value.to_orm(
                         parent_id=self.id,
@@ -131,7 +137,7 @@ class FromDBModel(BaseModel):
                     )
                 elif isinstance(value, list):
                     if len(value) > 0:
-                        if isinstance(value[0], FromDBModel):
+                        if isinstance(value[0], SQLModel):
                             # Handle lists of nested Pydantic models, passing parent_id to each item
                             orm_fields[field_name] = [
                                 item.to_orm(
@@ -151,3 +157,9 @@ class FromDBModel(BaseModel):
             orm_fields[parent_field_name] = parent_id
 
         return self.__ormclass__(**orm_fields)
+
+    async def sync_to_db(self, session: AsyncSession):
+        instance = self.to_orm()
+        await session.merge(instance)
+        await session.commit()
+        await session.flush()

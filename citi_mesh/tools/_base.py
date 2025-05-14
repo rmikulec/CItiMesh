@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from sqlalchemy.ext.asyncio import AsyncSession
-from citi_mesh.database.models import Tenant
+from citi_mesh.database._models import Tenant
 
 
 class CitimeshTool(ABC):

@@ -2,7 +2,7 @@ from citi_mesh.logging import get_logger
 from openai.types.chat import ParsedFunctionToolCall
 import json
 
-from citi_mesh.tools.base import CitimeshTool
+from citi_mesh.tools._base import CitimeshTool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)

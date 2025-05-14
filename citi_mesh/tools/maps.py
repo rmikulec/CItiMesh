@@ -4,7 +4,7 @@ import json
 import os
 import datetime
 
-from citi_mesh.tools.base import CitimeshTool
+from citi_mesh.tools._base import CitimeshTool
 
 SYSTEM_MESSAGE = """You are an expert at interpreting results from the Google Maps API. 
 You are designated with the task of recieving raw JSON output from google maps directions API, 

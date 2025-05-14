@@ -10,27 +10,27 @@ from sqlalchemy import (
     Index,
 )
 from sqlalchemy.orm import relationship
-from citi_mesh.database.base import BaseTable
+from citi_mesh.database._base import SQLTable
 
-class TenantTable(BaseTable):
+class TenantTable(SQLTable):
     name = Column(String(length=32), unique=True, index=True)
     display_name = Column(String(length=32), unique=True)
     registered_number = Column(String(length=17), unique=True)
     subdomain = Column(String(length=16), unique=True)
 
     # Relationships
-    providers = relationship(
-        "ProviderTable", back_populates=None, cascade="all, delete-orphan"
+    repositorys = relationship(
+        "RepositoryTable", back_populates=None, cascade="all, delete-orphan"
     )
 
 
-class ResourceTypeTable(BaseTable):
-    provider_id = Column(String(length=128), ForeignKey("provider.id"))
+class ResourceTypeTable(SQLTable):
+    repository_id = Column(String(length=128), ForeignKey("repository.id"))
     name = Column(String(length=64))
     display_name = Column(String)  # formerly "name_pretty"
 
     __table_args__ = (
-        Index("idx_resource_type_provider_id_name", "provider_id", "name", unique=False),
+        Index("idx_resource_type_repository_id_name", "repository_id", "name", unique=False),
     )
 
     # Many-to-many link back to resources
@@ -39,9 +39,9 @@ class ResourceTypeTable(BaseTable):
     )
 
 
-class ResourceTable(BaseTable):
+class ResourceTable(SQLTable):
     tenant_id = Column(String(length=128), ForeignKey("tenant.id"))
-    provider_id = Column(String(length=128), ForeignKey("provider.id"), nullable=True)
+    repository_id = Column(String(length=128), ForeignKey("repository.id"), nullable=True)
     name = Column(String(length=128))
     description = Column(Text)
     phone_number = Column(String)
@@ -55,13 +55,13 @@ class ResourceTable(BaseTable):
     )
 
 
-class ResourceTypeLinkTable(BaseTable):
+class ResourceTypeLinkTable(SQLTable):
     # Composite PK of (resource_id, resource_type_id)
     resource_id = Column(String(length=128), ForeignKey("resource.id"), primary_key=True)
     resource_type_id = Column(String(length=128), ForeignKey("resource_type.id"), primary_key=True)
 
 
-class AddressTable(BaseTable):
+class AddressTable(SQLTable):
     street = Column(String(128))
     street2 = Column(String(128), nullable=True)
     city = Column(String(64))
@@ -73,15 +73,29 @@ class AddressTable(BaseTable):
     resources = relationship("ResourceTable", back_populates="address")
 
 
-class ProviderTable(BaseTable):
+class RepositoryTable(SQLTable):
     tenant_id = Column(String(length=128), ForeignKey("tenant.id"))
     name = Column(String(length=64))
     display_name = Column(String(length=64))
     tool_description = Column(Text)
-    provider_type = Column(String)  # formerly "source_type"
+    repository_type = Column(String)  # formerly "source_type"
 
-    __table_args__ = (Index("idx_provider_tenant_id_name", "tenant_id", "name", unique=False),)
+    __table_args__ = (Index("idx_repository_tenant_id_name", "tenant_id", "name", unique=False),)
 
     resource_types = relationship(
         "ResourceTypeTable", back_populates=None, cascade="all, delete-orphan"
     )
+
+
+class AnalyticConfig(SQLTable):
+    tenant_id = Column(String, ForeignKey("tenant.id"))
+    name = Column(String(length=32), unique=True)
+    display_name = Column(String(length=32), unique=True)
+    description = Column(Text)
+    value_type = Column(String(length=16))
+
+
+class SourceTable(SQLTable):
+    repository_id = Column(String, ForeignKey("repository.id"))
+    source_type = Column(String)
+    details = Column(String)
