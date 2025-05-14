@@ -1,6 +1,7 @@
 import os
 import asyncio
-from fastapi import FastAPI, Request, Form, HTTPException, status, BackgroundTasks
+from io import BytesIO
+from fastapi import FastAPI, Request, Form, HTTPException, status, BackgroundTasks, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.responses import JSONResponse
@@ -11,8 +12,10 @@ from twilio.request_validator import RequestValidator
 from citi_mesh import __version__
 from citi_mesh.logging import get_logger
 from citi_mesh.engine import CitiEngine
+from citi_mesh.data.provider import CSVProvider, WebpageProvider
 from citi_mesh.utils import send_message_twilio
 from citi_mesh.dev.demo import load_output_config, load_tools
+from citi_mesh.database.models import Provider
 
 logger = get_logger(__name__)
 
@@ -20,7 +23,8 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     logger.info("App starting...")
-    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=load_tools())
+    tools = await load_tools()
+    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=tools)
 
     yield
 
@@ -119,5 +123,11 @@ async def sms(
     )
 
 
+@app.post("/provider/{tenant_id}")
+def post_webpage_provider(provider: Provider, webpage: str):
+    pass
+
 if __name__ == "__main__":
     app.run(debug=True)
+
+

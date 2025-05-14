@@ -1,6 +1,6 @@
 import json
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from citi_mesh.logging import get_logger
 from citi_mesh.utils import json_serializer
@@ -45,7 +45,7 @@ class ProviderTool(CitimeshTool):
         )
     
 
-    async def call(self, session: Session, resource_types: list[str]) -> str:
+    async def call(self, session: AsyncSession, resource_types: list[str]) -> str:
         resources = await self.provider.get_resources_by_type(session, resource_types)
 
         return json.dumps(

@@ -6,15 +6,15 @@ import json
 import pandas as pd
 import numpy as np
 from abc import abstractmethod, ABC
-from pydantic import BaseModel, create_model, Field
-from functools import lru_cache
-from typing import Union, Optional, Literal
-from sqlalchemy.orm import Session
+from pydantic import create_model, Field
+from typing import Union, Optional
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from enum import Enum
 
-from citi_mesh.database.crud import get_tenant_from_name
-from citi_mesh.database.resource import Resource, Tenant, ResourceType, Address
-from citi_mesh.database.resource import Provider as Base
+from citi_mesh.database._tables import TenantTable
+from citi_mesh.database.models import Resource, Tenant, ResourceType, Address
+from citi_mesh.database.models import Provider as Base
 from citi_mesh.config import Config
 
 
@@ -79,9 +79,16 @@ class Provider(ABC):
         self.types_ = types_
         self.client = openai.AsyncClient()
 
-    @lru_cache
-    def _get_tenant(self, session: Session) -> Tenant:
-        return get_tenant_from_name(session=session, tenant_name=self.tenant_name)
+    async def _get_tenant_id(self, session: AsyncSession) -> Tenant:
+        stmt = (
+             select(TenantTable).where(TenantTable.name == self.tenant_name)
+        )
+        instance = (await session.execute(stmt)).scalar_one_or_none()
+
+        if not instance:
+            raise Exception(f"Tenant: {self.tenant_name} not found")
+    
+        return instance.id
 
     @abstractmethod
     def _parse_source(self) -> list[str]:
@@ -89,14 +96,14 @@ class Provider(ABC):
         # openai to parse resources from
         pass
 
-    def _sync_to_db(self, openai_resources: list[Resource], session: Session):
+    async  def _sync_to_db(self, openai_resources: list[Resource], session: AsyncSession):
         """
         Private method to sync resources to the SQL Database
         """
 
         # Create the new provider with empty resources
         provider = Base(
-            tenant_id=self._get_tenant(session).id,
+            tenant_id=self._get_tenant_id(session),
             name=self.name,
             display_name=self.display_name,
             provider_type=self.__provider_type__,
@@ -121,9 +128,9 @@ class Provider(ABC):
             )
             provider.resources.append(new_resource)
 
-        session.merge(provider.to_orm())
-        session.commit()
-        session.flush()
+        await session.merge(provider.to_orm())
+        await session.commit()
+        await session.flush()
 
     async def _openai_parse(self, source_strings: list[str]) -> list[Resource]:
         """
@@ -152,7 +159,7 @@ class Provider(ABC):
             return []
 
     async def pull_resources(
-        self, session: Session, debug: bool = False, chunk_size: int = 20
+        self, session: AsyncSession, debug: bool = False, chunk_size: int = 20
     ) -> Optional[list[Resource]]:
         """
         Pulls resources out of the original source and syncs them to the database
@@ -177,7 +184,7 @@ class Provider(ABC):
         resources = sum(openai_results, [])
 
         if not debug:
-            self._sync_to_db(resources, session=session)
+            await self._sync_to_db(resources, session=session)
         else:
             return resources
 

@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-
+from sqlalchemy.ext.asyncio import AsyncSession
 from citi_mesh.database.models import Tenant
-from sqlalchemy.orm import Session
 
 
 class CitimeshTool(ABC):
@@ -36,5 +35,5 @@ class CitimeshTool(ABC):
         }
 
     @abstractmethod
-    def call(self, session: Session, *args, **kwargs) -> str:
+    async def call(self, session: AsyncSessionSession, *args, **kwargs) -> str:
         pass

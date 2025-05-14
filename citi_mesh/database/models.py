@@ -5,9 +5,9 @@ from datetime import datetime
 from typing import Optional, List
 from datetime import datetime
 
-from sqlalchemy import select, join
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import Field, model_validator, create_model
+from pydantic import Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from citi_mesh.database import _tables
@@ -73,13 +73,15 @@ class Resource(FromDBModel):
 class Provider(FromDBModel):
     __ormclass__ = _tables.ProviderTable
 
-    tenant_id: str
     name: str
     display_name: str
     tool_description: str
-    provider_type: str
-    created_at: datetime = Field(default=datetime.now())
-    updated_at: datetime = Field(default=datetime.now())
+
+    # Fields to not sure on request payload
+    tenant_id: SkipJsonSchema[str]
+    provider_type: SkipJsonSchema[str]
+    created_at: SkipJsonSchema[datetime] = Field(default=datetime.now())
+    updated_at: SkipJsonSchema[datetime] = Field(default=datetime.now())
 
     # Relationship: resources
     resource_types: List["ResourceType"] = Field(default_factory=list)

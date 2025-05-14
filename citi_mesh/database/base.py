@@ -3,7 +3,7 @@ import re
 
 from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, String, select
-from sqlalchemy.orm import Session, joinedload, selectinload, Load
+from sqlalchemy.orm import joinedload, selectinload, Load
 from sqlalchemy.orm.interfaces import MapperOption
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncAttrs
 from sqlalchemy.inspection import inspect
@@ -74,7 +74,7 @@ class FromDBModel(BaseModel):
         return opts
 
     @classmethod
-    async def afrom_id(cls, session: AsyncSession, id_: str) -> AsyncGenerator[Self]:
+    async def from_id(cls, session: AsyncSession, id_: str) -> AsyncGenerator[Self]:
         load_opts = cls._build_load_options(cls.__ormclass__, 2)
         stmt = (
             select(cls.__ormclass__)
@@ -84,11 +84,6 @@ class FromDBModel(BaseModel):
         instance = (await session.execute(stmt)).scalar_one_or_none()
         return cls.model_validate(instance)
 
-
-    @classmethod
-    def from_id(cls, session: Session, id_: str):
-        instance = session.query(cls.__ormclass__).filter(cls.__ormclass__.id==id_).first()
-        return cls.model_validate(instance)
 
     def check_orm_fields(self, field_name) -> bool:
         mapper = inspect(self.__ormclass__)
