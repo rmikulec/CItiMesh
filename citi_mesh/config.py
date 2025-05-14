@@ -1,12 +1,12 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
 import os
-import urllib
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class CitimeshConfig(BaseSettings):
     # Model Configuration
-    parsing_model: str = Field(default="gpt-4o-2024-08-06")
+    parsing_model: str = Field(default="gpt-4o-mini")
     chat_model: str = Field(default="gpt-4o-2024-08-06")
     temperature: float = Field(default=0.4)
     default_model_parameters: dict = Field(default_factory=dict)

@@ -1,32 +1,43 @@
-import openai
-import requests
 import asyncio
-import pathlib
 import json
-import pandas as pd
-import numpy as np
-from abc import abstractmethod, ABC
-from pydantic import BaseModel, create_model
-from functools import cached_property
-from typing import Union, Optional, Literal
-from sqlalchemy.orm import Session
+import pathlib
+from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Optional, Union
 
-from citi_mesh.database.crud import get_tenant_from_name
-from citi_mesh.database.resource import Resource, Provider, Tenant
-from citi_mesh.database.db_pool import DatabasePool
+import numpy as np
+import openai
+import pandas as pd
+import requests
+from pydantic import Field, create_model
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from citi_mesh.config import Config
+from citi_mesh.database._models import Address, Repository, Resource, Source
 
 
-def create_resource_list_model(tenant: Tenant):
+def create_resource_list_model(resource_types: list[tuple[str, str]]):
     """
     Return a pydantic model class that has a single field:
     `resources: List[DynamicResource]`
     where `DynamicResource` is the subclass generated from resource_types.
     """
-    DynamicResource = tenant.create_resource_openai_class()
+    enum_name = "ResourceTypeEnum"
+    type_map = {rt[0].upper().replace(" ", "_"): rt[0] for rt in resource_types}
+    ResourceTypeEnum = Enum(enum_name, type_map, type=str)
 
-    ResourceList = create_model("ResourceList", resources=(list[DynamicResource], ...))
+    # Define the fields you want (omitting id, tenant_id, etc.).
+    OpenAIResource = create_model(
+        "OpenAIResource",
+        name=(str, ...),
+        description=(str, ...),
+        phone_number=(Optional[str], None),
+        website=(Optional[str], None),
+        address=(Optional[Address], None),
+        resource_types=(list[ResourceTypeEnum], Field(default_factory=list)),
+    )
+
+    ResourceList = create_model("ResourceList", resources=(list[OpenAIResource], ...))
 
     return ResourceList
 
@@ -42,16 +53,18 @@ Please do include all of the data that is in the string.
 """
 
 
-class BaseProvider(ABC):
+class Injestor(ABC):
     """
-    Base Provider to be extending when creating a new type of 'source'
-    The BaseProvider handles sending in the data to openai and then syncing it
+    Injestors take in a form of data, a respository, and creates new resources based on that
+
+    Injestor to be extending when creating a new type of 'repository'
+    The base Injestor handles sending in the data to openai and then syncing it
     to the SQL Database
 
     To extend, the following must be implemented:
       - __init__(): The constructor can be used to introduce any new
         attributes that may be used when parsing the data. The class
-        must send over a tenant_name and name to the BaseProvider when
+        must send over a tenant_name and name to the BaseRepository when
         initializing
       - _parse_source(): This function must use any class attributes to
         create a list of strings that will later be sent to openai to pull out
@@ -60,16 +73,13 @@ class BaseProvider(ABC):
 
     __source_type__ = "base"
 
-    def __init__(self, tenant_name: str, name: str, session: Session):
-        self.tenant_name = tenant_name
-        self.name = name
-        self.session = session
+    def __init__(
+        self,
+        repo: Repository,
+    ):
+        self.repo = repo
         self.client = openai.AsyncClient()
-        self.db_pool = DatabasePool.get_instance()
-
-    @cached_property
-    def tenant(self) -> Tenant:
-        return get_tenant_from_name(session=self.session, tenant_name=self.tenant_name)
+        self.details = None
 
     @abstractmethod
     def _parse_source(self) -> list[str]:
@@ -77,31 +87,24 @@ class BaseProvider(ABC):
         # openai to parse resources from
         pass
 
-    def _sync_to_db(self, openai_resources: list[Resource]):
+    async def _sync_to_db(self, openai_resources: list[Resource], session: AsyncSession):
         """
         Private method to sync resources to the SQL Database
         """
-
-        # Create the new provider with empty resources
-        provider = Provider(
-            tenant_id=self.tenant.id,
-            name=self.name,
-            provider_type=self.__source_type__,
-            resources=[],
+        source = Source(
+            repository_id=self.repo.id, source_type=self.__source_type__, details=self.details
         )
+        await session.merge(source.to_orm())
 
         # Loop through the openai generated resources and
         # using the Tenant, create the proper resources to
-        # add to the Provider
+        # add to the Repository
         for resource in openai_resources:
-            new_resource = self.tenant.create_resource_from_openai_resource(
-                openai_resource=resource, provider_id=provider.id
-            )
-            provider.resources.append(new_resource)
+            new_resource = self.repo.create_resource_from_openai_resource(openai_resource=resource)
+            await session.merge(new_resource.to_orm())
 
-        self.session.merge(provider.to_orm())
-        self.session.commit()
-        self.session.flush()
+        await session.commit()
+        await session.flush()
 
     async def _openai_parse(self, source_strings: list[str]) -> list[Resource]:
         """
@@ -120,7 +123,9 @@ class BaseProvider(ABC):
                     {"role": "system", "content": SYSTEM_MESSAGE},
                     {"role": "user", "content": "\n".join(source_strings)},
                 ],
-                response_format=create_resource_list_model(self.tenant),
+                response_format=create_resource_list_model(
+                    resource_types=[(t.name, t.display_name) for t in self.repo.resource_types]
+                ),
             )
 
             resources = completion.choices[0].message.parsed.resources
@@ -130,7 +135,7 @@ class BaseProvider(ABC):
             return []
 
     async def pull_resources(
-        self, debug: bool = False, chunk_size: int = 20
+        self, session: AsyncSession, debug: bool = False, chunk_size: int = 20
     ) -> Optional[list[Resource]]:
         """
         Pulls resources out of the original source and syncs them to the database
@@ -140,7 +145,7 @@ class BaseProvider(ABC):
             of Resources instead. Defaults to False.
           - chunk_size: The size of each sublist that is sent over to openai. The bigger
             the chunk size, the faster it will run, but may result in lower accuracy.
-            Defaults to 25.
+            Defaults to 20.
         """
         source_data = self._parse_source()
 
@@ -149,33 +154,37 @@ class BaseProvider(ABC):
         ]
 
         openai_results = await asyncio.gather(
-            *[self._openai_parse(source_strings=source_str) for source_str in chunked_data]
+            *[self._openai_parse(source_strings=source_strings) for source_strings in chunked_data]
         )
 
         resources = sum(openai_results, [])
 
         if not debug:
-            self._sync_to_db(resources)
+            await self._sync_to_db(resources, session=session)
         else:
             return resources
 
 
-class WebpageProvider(BaseProvider):
+class WebpageInjestor(Injestor):
     """
-    Provider class used to update the Resources DB with information
+    Repository class used to update the Resources DB with information
     from a given webpage
 
     Attributes:
-      - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular provider (i.e. NYC Open Data)
-      - url: The url of the webpage where the information is located
+      - repo( Repository): the repository SQLModel to add the new resources to
+      - url(str): The URL of the webpage to sync with
     """
 
     __source_type__ = "webpage"
 
-    def __init__(self, tenant_name: str, name: str, session: Session, url: str):
+    def __init__(
+        self,
+        repo: Repository,
+        url: str,
+    ):
         self.url = url
-        super().__init__(tenant_name=tenant_name, name=name, session=session)
+        super().__init__(repo=repo)
+        self.details = url
 
     def _parse_source(self):
         """
@@ -193,24 +202,26 @@ class WebpageProvider(BaseProvider):
         return [response.text]
 
 
-class CSVProvider(BaseProvider):
+class CSVInjestor(Injestor):
     """
-    Provider class used to update the Resources DB with information
+    Repository class used to update the Resources DB with information
     from a given CSV File
 
     Attributes:
-      - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular provider (i.e. NYC Open Data)
-      - csv_path: The path to the csv containing the information
+      - repo( Repository): the repository SQLModel to add the new resources to
+      - csv_path(str): Path to the csv to sync with
     """
 
     __source_type__ = "csv_file"
 
     def __init__(
-        self, tenant_name: str, name: str, session: Session, csv_path: Union[str, pathlib.Path]
+        self,
+        repo: Repository,
+        csv_path: Union[str, pathlib.Path],
     ):
         self.csv_path = pathlib.Path(csv_path)
-        super().__init__(tenant_name=tenant_name, name=name, session=session)
+        super().__init__(repo=repo)
+        self.details = self.csv_path.stem
 
     def _parse_source(self):
         """

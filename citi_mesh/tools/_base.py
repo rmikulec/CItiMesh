@@ -1,23 +1,28 @@
 from abc import ABC, abstractmethod
 
-from citi_mesh.database.resource import Tenant
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
-class BaseCitimeshTool(ABC):
+class CitimeshTool(ABC):
+    """
+    Base tool to be extended to create classes that are compatible with the Citimesh Tool Manager
+    These tools automatically work, and can be called by OpenAI.
+
+    Attributes:
+        - tool_name(str): The name of the tool
+        - tool_desc(str): A detailed description of the tool (This will be seen by the LLM)
+        - args(dict): A jsonschema detailing the arguements for the tool
+
+    """
 
     def __init__(
         self,
         tool_name: str,
         tool_desc: str,
         args: dict,
-        tenant: Tenant = None,
-        session: Session = None,
     ):
         self.tool_name = tool_name
         self.tool_desc = tool_desc
-        self.tenant = tenant
-        self.session = session
         self.args = args
 
     def to_openai(self):
@@ -38,5 +43,9 @@ class BaseCitimeshTool(ABC):
         }
 
     @abstractmethod
-    def call(self, *args, **kwargs) -> str:
+    async def call(self, session: AsyncSession, *args, **kwargs) -> str:
+        """
+        Method to be extended in order to implement the behaviour of the tool.
+        Method must be asynchronous and tool will get a Async SQLAlchemy session
+        """
         pass

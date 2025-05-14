@@ -1,5 +1,6 @@
-from pydantic import BaseModel, create_model, Field
-from typing import Literal, Any, Type, Optional
+from typing import Any, Literal, Optional, Type
+
+from pydantic import BaseModel, Field, create_model
 
 
 class Analytic(BaseModel):

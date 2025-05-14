@@ -1,7 +1,9 @@
 import os
 from datetime import datetime
 from typing import Callable
+
 from twilio.rest import Client
+
 
 def json_serializer(o):
     if isinstance(o, datetime):
@@ -11,6 +13,9 @@ def json_serializer(o):
 
 
 async def send_message_twilio(to: str, message_func: Callable, *args, **kwargs):
+    """
+    Helper function to use the Twilio API in order to send a message through their servers
+    """
     client = Client(
         username=os.getenv("TWILIO_API_KEY", None),
         password=os.getenv("TWILIO_API_SECRET", None),

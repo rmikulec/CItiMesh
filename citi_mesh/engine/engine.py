@@ -1,13 +1,14 @@
-import openai
 import threading
 from typing import Type
 
-from citi_mesh.engine.system_message import INITIAL_MESSAGE, PROCESSING_MESSAGE
-from citi_mesh.engine.analytic_models import OpenAIOutput
-from citi_mesh.logging import get_logger
-from citi_mesh.engine.messages import MessageTracker
-from citi_mesh.tools import CitiToolManager
+import openai
+
 from citi_mesh.config import Config
+from citi_mesh.engine.analytic_models import OpenAIOutput
+from citi_mesh.engine.messages import MessageTracker
+from citi_mesh.engine.system_message import INITIAL_MESSAGE, PROCESSING_MESSAGE
+from citi_mesh.logging import get_logger
+from citi_mesh.tools import CitiToolManager
 
 logger = get_logger(__name__)
 
@@ -57,7 +58,9 @@ class CitiEngine:
                 # Call tools and add messages
                 cls._message_tracker.extend(
                     phone=phone,
-                    messages=cls._tool_manager.from_openai(completion.choices[0].message.tool_calls),
+                    messages=cls._tool_manager.from_openai(
+                        completion.choices[0].message.tool_calls
+                    ),
                 )
 
                 completion = await cls._client.beta.chat.completions.parse(
@@ -93,7 +96,7 @@ class CitiEngine:
     @classmethod
     async def get_processing_message(cls, phone: str, message: str):
 
-        user_message=(
+        user_message = (
             f"Here is the current conversation: {cls._message_tracker.get_conversation(phone)}"
             f"Here is the incoming message: {message}"
         )
@@ -109,7 +112,9 @@ class CitiEngine:
         message = completion.choices[0].message.content
 
         with cls._lock:
-            cls._message_tracker.add(phone=phone, message={"role": "assistant", "content": message})
+            cls._message_tracker.add(
+                phone=phone, message={"role": "assistant", "content": message}
+            )
 
         return message
 
