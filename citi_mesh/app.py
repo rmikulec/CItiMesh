@@ -1,12 +1,15 @@
 import os
+import io
 import asyncio
-from io import BytesIO
-from fastapi import FastAPI, Request, Form, HTTPException, status, BackgroundTasks, UploadFile
+import pathlib
+import pandas as pd
+from tempfile import TemporaryDirectory
+from pydantic import BaseModel, ValidationError
+from fastapi import FastAPI, Request, Form, HTTPException, status, BackgroundTasks, UploadFile, File, Depends
+from starlette import status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 from starlette.responses import JSONResponse
 from contextlib import asynccontextmanager
-from twilio.twiml.messaging_response import MessagingResponse
 from twilio.request_validator import RequestValidator
 
 from citi_mesh import __version__
@@ -16,6 +19,7 @@ from citi_mesh.data.provider import CSVProvider, WebpageProvider
 from citi_mesh.utils import send_message_twilio
 from citi_mesh.dev.demo import load_output_config, load_tools
 from citi_mesh.database.models import Provider
+from citi_mesh.database.session import get_session_dependency
 
 logger = get_logger(__name__)
 
@@ -23,8 +27,8 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     logger.info("App starting...")
-    tools = await load_tools()
-    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=tools)
+    #tools = await load_tools()
+    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=[])
 
     yield
 
@@ -89,7 +93,7 @@ async def health_check():
         )
 
 
-@app.post("/sms")
+@app.post("/sms", tags=['webhooks'])
 async def sms(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -123,9 +127,70 @@ async def sms(
     )
 
 
-@app.post("/provider/{tenant_id}")
-def post_webpage_provider(provider: Provider, webpage: str):
+
+class ProviderSubmissionResponse(BaseModel):
     pass
+
+
+@app.post("/provider/web/{tenant_name}", tags=['provider'])
+async def post_webpage_provider(
+    tenant_name: str, 
+    webpage: str, 
+    provider: Provider, 
+    session= Depends(get_session_dependency)
+):
+    repo = WebpageProvider(
+        tenant_name=tenant_name,
+        name=provider.name,
+        display_name=provider.display_name,
+        tool_description=provider.tool_description,
+        types_=[
+            (t.name, t.display_name)
+            for t in provider.resource_types
+        ],
+        url=webpage
+    )
+
+    await repo.pull_resources(session)
+
+    return status.HTTP_200_OK
+
+
+@app.post("/provider/csv/{tenant_name}", tags=['provider'])
+async def post_csv_provider(
+    tenant_name: str,
+    provider: str = Form(..., description="Provider metadata"),
+    csv_file: UploadFile = File(..., description="CSV file containing resources."),
+    session = Depends(get_session_dependency)
+):
+    try:
+        meta = Provider.model_validate_json(provider)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors())
+
+    # 2. Read & parse the CSV
+    contents = await csv_file.read()
+    text = contents.decode("utf-8")
+    df = pd.read_csv(io.StringIO(text))
+    # Use StringIO so csv.DictReader can treat it like a file
+    with TemporaryDirectory() as temp_dir:
+        temp_path = pathlib.Path(temp_dir) / "temp.csv"
+        df.to_csv(temp_path)
+
+        repo = CSVProvider(
+            tenant_name=tenant_name,
+            csv_path=temp_path,
+            name=meta.name,
+            display_name=meta.display_name,
+            tool_description=meta.tool_description,
+            types_=[
+                (t.name, t.display_name)
+                for t in meta.resource_types
+            ],
+        )
+
+        await repo.pull_resources(session=session)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

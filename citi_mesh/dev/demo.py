@@ -30,7 +30,7 @@ def load_output_config() -> OpenAIOutput:
 
 async def load_tools():
     async with get_session() as session:
-        tenant = await Tenant.afrom_id(session, '3bcaeb22-d367-4dec-b473-eb1fe329ceb2')
+        tenant = await Tenant.from_id(session, '3bcaeb22-d367-4dec-b473-eb1fe329ceb2')
         return CitiToolManager(
             tools=[
                 ProviderTool(

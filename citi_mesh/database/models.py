@@ -30,7 +30,7 @@ class Address(FromDBModel):
         Example logic to auto-populate google_place_id
         (only if you really want to do this at model validation time).
         """
-        client = googlemaps.Client(key=os.environ["GOOGLE_MAPS_API"])
+        client = googlemaps.Client(key=os.environ["GOOGLE_MAPS_KEY"])
         address_str = (
             f"{self.street} {self.street2 or ''}, {self.city}, {self.state}, {self.zip_code}"
         )
@@ -45,12 +45,10 @@ class Address(FromDBModel):
 class ResourceType(FromDBModel):
     __ormclass__ = _tables.ResourceTypeTable
 
-    provider_id: str
     name: str
     display_name: str
-    created_at: datetime = Field(default=datetime.now())
-    updated_at: datetime = Field(default=datetime.now())
 
+    provider_id: SkipJsonSchema[str] = None
 
 
 class Resource(FromDBModel):
@@ -63,8 +61,6 @@ class Resource(FromDBModel):
     phone_number: Optional[str] = None
     website: Optional[str] = None
     address: Optional[Address] = None
-    created_at: datetime = Field(default=datetime.now())
-    updated_at: datetime = Field(default=datetime.now())
 
     # Many-to-many with ResourceType
     resource_types: List[ResourceType] = Field(default_factory=list)
@@ -78,14 +74,16 @@ class Provider(FromDBModel):
     tool_description: str
 
     # Fields to not sure on request payload
-    tenant_id: SkipJsonSchema[str]
-    provider_type: SkipJsonSchema[str]
-    created_at: SkipJsonSchema[datetime] = Field(default=datetime.now())
-    updated_at: SkipJsonSchema[datetime] = Field(default=datetime.now())
+    tenant_id: SkipJsonSchema[str] = None
+    provider_type: SkipJsonSchema[str] = None
 
     # Relationship: resources
     resource_types: List["ResourceType"] = Field(default_factory=list)
 
+    def _get_resource_type(self, name):
+        return list(
+            filter(lambda r: r.name==name, self.resource_types)
+        )[0]
 
     def create_resource_from_openai_resource(
         self, openai_resource: "ResourceOpenAI", provider_id: str
@@ -104,7 +102,7 @@ class Provider(FromDBModel):
         resolved_types = []
         for enum_value in openai_resource.resource_types:
             # enum_value.value is e.g. "Shelter" or "Food Pantry"
-            rtype = self.get_resource_type(enum_value.value)
+            rtype = self._get_resource_type(enum_value.value)
             if not rtype:
                 raise ValueError(
                     f"No matching resource_type found for '{enum_value.value}' in tenant '{self.name}'"
@@ -149,8 +147,6 @@ class Tenant(FromDBModel):
     display_name: str
     registered_number: str
     subdomain: str
-    created_at: datetime = Field(default=datetime.now())
-    updated_at: datetime = Field(default=datetime.now())
 
     providers: List[Provider] = Field(default_factory=list)
 

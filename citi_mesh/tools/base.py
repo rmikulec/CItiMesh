@@ -35,5 +35,5 @@ class CitimeshTool(ABC):
         }
 
     @abstractmethod
-    async def call(self, session: AsyncSessionSession, *args, **kwargs) -> str:
+    async def call(self, session: AsyncSession, *args, **kwargs) -> str:
         pass

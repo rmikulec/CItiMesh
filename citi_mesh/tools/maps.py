@@ -29,7 +29,7 @@ class GoogleMapsDirectionsTool(CitimeshTool):
             **kwargs,
         )
 
-        self.gmaps = googlemaps.Client(key=os.environ["GOOGLE_MAPS_API"])
+        self.gmaps = googlemaps.Client(key=os.environ["GOOGLE_MAPS_KEY"])
         self.openai = openai.OpenAI()
 
     def _lookup_place(self, place_name):

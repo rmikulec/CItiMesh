@@ -72,10 +72,17 @@ class Provider(ABC):
 
     __provider_type__ = "base"
 
-    def __init__(self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str]):
+    def __init__(self, 
+        tenant_name: str, 
+        name: str, 
+        display_name: str,
+        tool_description: str,
+        types_: tuple[str, str]
+    ):
         self.tenant_name = tenant_name
         self.name = name
         self.display_name = display_name
+        self.tool_description = tool_description
         self.types_ = types_
         self.client = openai.AsyncClient()
 
@@ -103,9 +110,10 @@ class Provider(ABC):
 
         # Create the new provider with empty resources
         provider = Base(
-            tenant_id=self._get_tenant_id(session),
+            tenant_id=(await self._get_tenant_id(session)),
             name=self.name,
             display_name=self.display_name,
+            tool_description=self.tool_description,
             provider_type=self.__provider_type__,
             resources=[],
             resource_types=[]
@@ -126,8 +134,8 @@ class Provider(ABC):
             new_resource = provider.create_resource_from_openai_resource(
                 openai_resource=resource, provider_id=provider.id
             )
-            provider.resources.append(new_resource)
-
+            await session.merge(new_resource.to_orm())
+        
         await session.merge(provider.to_orm())
         await session.commit()
         await session.flush()
@@ -202,9 +210,16 @@ class WebpageProvider(Provider):
 
     __provider_type__ = "webpage"
 
-    def __init__(self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str], url: str):
+    def __init__(self,
+        tenant_name: str, 
+        name: str, 
+        display_name: str,
+        tool_description: str,
+        types_: tuple[str, str], 
+        url: str
+    ):
         self.url = url
-        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, types_=types_)
+        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, tool_description=tool_description, types_=types_)
 
     def _parse_source(self):
         """
@@ -236,10 +251,16 @@ class CSVProvider(Provider):
     __provider_type__ = "csv_file"
 
     def __init__(
-        self, tenant_name: str, name: str, display_name: str, types_: tuple[str, str], csv_path: Union[str, pathlib.Path]
+        self, 
+        tenant_name: str, 
+        name: str, 
+        display_name: str, 
+        tool_description: str,
+        types_: tuple[str, str], 
+        csv_path: Union[str, pathlib.Path]
     ):
         self.csv_path = pathlib.Path(csv_path)
-        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, types_=types_)
+        super().__init__(tenant_name=tenant_name, name=name, display_name=display_name, tool_description=tool_description, types_=types_)
 
     def _parse_source(self):
         """

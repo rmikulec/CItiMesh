@@ -1,8 +1,8 @@
 import uuid
 import re
-
+from datetime import datetime, timezone
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, String, select
+from sqlalchemy import Column, String, select, DateTime
 from sqlalchemy.orm import joinedload, selectinload, Load
 from sqlalchemy.orm.interfaces import MapperOption
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncAttrs
@@ -26,6 +26,8 @@ class BaseTable(Base, AsyncAttrs):
     __abstract__ = True
 
     id = Column(String(length=128), primary_key=True, default=lambda: str(uuid.uuid4()))
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc))
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -36,6 +38,8 @@ class BaseTable(Base, AsyncAttrs):
 class FromDBModel(BaseModel):
     __ormclass__ = None
     id: SkipJsonSchema[str] = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: SkipJsonSchema[datetime] = Field(default=datetime.now(timezone.utc))
+    updated_at: SkipJsonSchema[datetime] = Field(default=datetime.now(timezone.utc))
 
     model_config = ConfigDict(from_attributes=True)
         
