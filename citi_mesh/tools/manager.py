@@ -1,22 +1,18 @@
-from citi_mesh.logging import get_logger
-from openai.types.chat import ParsedFunctionToolCall
 import json
 
-from citi_mesh.tools._base import CitimeshTool
+from openai.types.chat import ParsedFunctionToolCall
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = get_logger(__name__)
+from citi_mesh.logging import get_logger
+from citi_mesh.tools._base import CitimeshTool
 
+logger = get_logger(__name__)
 
 
 class CitiToolManager:
 
     def __init__(self, tools: list[CitimeshTool]):
-        self.tools = {
-            tool.tool_name: tool
-            for tool in tools
-        }
-
+        self.tools = {tool.tool_name: tool for tool in tools}
 
     def _get_tool(self, name: str):
         logger.info(f"Retrieving tool: {name}")
@@ -26,7 +22,9 @@ class CitiToolManager:
     def to_openai(self):
         return [tool.to_openai() for tool in self.tools.values()]
 
-    async def from_openai(self, tool_calls: list[ParsedFunctionToolCall], session: AsyncSession) -> list[dict[str, str]]:
+    async def from_openai(
+        self, tool_calls: list[ParsedFunctionToolCall], session: AsyncSession
+    ) -> list[dict[str, str]]:
         tool_messages = []
         for tool_call in tool_calls:
             logger.info(
@@ -48,7 +46,11 @@ class CitiToolManager:
             except Exception as e:
                 logger.error(f"Tool {tool.tool_name} Failed: {e}", exc_info=True)
                 tool_messages.append(
-                    {"role": "tool", "tool_call_id": tool_call.id, "content": f"Tool call failed."}
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": f"Tool call: {tool.tool_name} failed.",
+                    }
                 )
 
         return tool_messages

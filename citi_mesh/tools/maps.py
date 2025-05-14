@@ -1,14 +1,15 @@
-import googlemaps
-import openai
+import datetime
 import json
 import os
-import datetime
+
+import googlemaps
+import openai
 
 from citi_mesh.tools._base import CitimeshTool
 
-SYSTEM_MESSAGE = """You are an expert at interpreting results from the Google Maps API. 
-You are designated with the task of recieving raw JSON output from google maps directions API, 
-and must effectively communicate to the user, in text, of how to navigate to their destination. 
+SYSTEM_MESSAGE = """You are an expert at interpreting results from the Google Maps API.
+You are designated with the task of recieving raw JSON output from google maps directions API,
+and must effectively communicate to the user, in text, of how to navigate to their destination.
 Keep in mind, that your result will eventually be sent to the user via SMS text message."""
 
 

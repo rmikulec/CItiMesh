@@ -1,16 +1,12 @@
-from datetime import datetime
-from datetime import datetime
-
-from sqlalchemy import (
-    Column,
-    String,
-    Text,
-    DateTime,
-    ForeignKey,
-    Index,
-)
+from sqlalchemy import Column, ForeignKey, Index, String, Text
 from sqlalchemy.orm import relationship
+
 from citi_mesh.database._base import SQLTable
+
+"""
+File contains all table definitions to be created in the database
+"""
+
 
 class TenantTable(SQLTable):
     name = Column(String(length=32), unique=True, index=True)
@@ -78,7 +74,6 @@ class RepositoryTable(SQLTable):
     name = Column(String(length=64))
     display_name = Column(String(length=64))
     tool_description = Column(Text)
-    repository_type = Column(String)  # formerly "source_type"
 
     __table_args__ = (Index("idx_repository_tenant_id_name", "tenant_id", "name", unique=False),)
 

@@ -1,7 +1,7 @@
-from pydantic_settings import BaseSettings
-from pydantic import Field
 import os
-import urllib
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class CitimeshConfig(BaseSettings):

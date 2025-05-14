@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
-from citi_mesh.config import Config
 from citi_mesh.engine.system_message import SYSTEM_MESSAGE
 
 

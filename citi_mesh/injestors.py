@@ -1,20 +1,19 @@
-import openai
-import requests
 import asyncio
-import pathlib
 import json
-import pandas as pd
-import numpy as np
-from abc import abstractmethod, ABC
-from pydantic import create_model, Field
-from typing import Union, Optional
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+import pathlib
+from abc import ABC, abstractmethod
 from enum import Enum
+from typing import Optional, Union
 
-from citi_mesh.database._tables import TenantTable
-from citi_mesh.database._models import Resource, Address, Repository, Source
+import numpy as np
+import openai
+import pandas as pd
+import requests
+from pydantic import Field, create_model
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from citi_mesh.config import Config
+from citi_mesh.database._models import Address, Repository, Resource, Source
 
 
 def create_resource_list_model(resource_types: list[tuple[str, str]]):
@@ -53,6 +52,7 @@ Please do not include any data that is not in the original string
 Please do include all of the data that is in the string.
 """
 
+
 class Injestor(ABC):
     """
     Injestors take in a form of data, a respository, and creates new resources based on that
@@ -71,9 +71,10 @@ class Injestor(ABC):
         a more structured response. This function *must* return list[str]
     """
 
-    __repository_type__ = "base"
+    __source_type__ = "base"
 
-    def __init__(self, 
+    def __init__(
+        self,
         repo: Repository,
     ):
         self.repo = repo
@@ -86,14 +87,12 @@ class Injestor(ABC):
         # openai to parse resources from
         pass
 
-    async  def _sync_to_db(self, openai_resources: list[Resource], session: AsyncSession):
+    async def _sync_to_db(self, openai_resources: list[Resource], session: AsyncSession):
         """
         Private method to sync resources to the SQL Database
         """
         source = Source(
-            repository_id=self.repo.id,
-            source_type=self.__repository_type__,
-            details=self.details
+            repository_id=self.repo.id, source_type=self.__source_type__, details=self.details
         )
         await session.merge(source.to_orm())
 
@@ -101,9 +100,7 @@ class Injestor(ABC):
         # using the Tenant, create the proper resources to
         # add to the Repository
         for resource in openai_resources:
-            new_resource = self.repo.create_resource_from_openai_resource(
-                openai_resource=resource
-            )
+            new_resource = self.repo.create_resource_from_openai_resource(openai_resource=resource)
             await session.merge(new_resource.to_orm())
 
         await session.commit()
@@ -127,10 +124,7 @@ class Injestor(ABC):
                     {"role": "user", "content": "\n".join(source_strings)},
                 ],
                 response_format=create_resource_list_model(
-                    resource_types=[
-                        (t.name, t.display_name)
-                        for t in self.repo.resource_types
-                    ]
+                    resource_types=[(t.name, t.display_name) for t in self.repo.resource_types]
                 ),
             )
 
@@ -177,14 +171,14 @@ class WebpageInjestor(Injestor):
     from a given webpage
 
     Attributes:
-      - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular repository (i.e. NYC Open Data)
-      - url: The url of the webpage where the information is located
+      - repo( Repository): the repository SQLModel to add the new resources to
+      - url(str): The URL of the webpage to sync with
     """
 
-    __repository_type__ = "webpage"
+    __source_type__ = "webpage"
 
-    def __init__(self,
+    def __init__(
+        self,
         repo: Repository,
         url: str,
     ):
@@ -214,12 +208,11 @@ class CSVInjestor(Injestor):
     from a given CSV File
 
     Attributes:
-      - tenant_name; The name of the organization or city using the system
-      - name: The name of this particular repository (i.e. NYC Open Data)
-      - csv_path: The path to the csv containing the information
+      - repo( Repository): the repository SQLModel to add the new resources to
+      - csv_path(str): Path to the csv to sync with
     """
 
-    __repository_type__ = "csv_file"
+    __source_type__ = "csv_file"
 
     def __init__(
         self,
