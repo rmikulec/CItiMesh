@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 import googlemaps
 from pydantic import Field, model_validator
@@ -167,6 +167,29 @@ class Source(SQLModel):
     details: str
 
 
+class AnalyticConfig(SQLModel):
+    __ormclass__ = _tables.AnalyticConfigTable
+
+    tenant_id: str
+    name: str
+    display_name: str
+    description: str
+    value_type: str
+    possible_values: list[str] = Field(..., default_factory=list)
+
+    @property
+    def _values_enum(self):
+        return Literal[tuple([v for v in self.possible_values])]
+
+    @property
+    def field_definition(self):
+        if self.possible_values:
+            return (self._values_enum, Field(..., description=self.description))
+
+        else:
+            return (self.value_type, Field(..., description=self.description))
+
+
 class Tenant(SQLModel):
     __ormclass__ = _tables.TenantTable
 
@@ -175,12 +198,13 @@ class Tenant(SQLModel):
     registered_number: str
     subdomain: str
 
-    repositorys: List[SQLModel] = Field(default_factory=list)
+    repositories: List[Repository] = Field(default_factory=list)
+    analytics: list[AnalyticConfig] = Field(default_factory=list)
 
     def get_repository(self, repository_name: str):
         """
         Get a repository given a name
         """
         return list(
-            filter(lambda repository: repository.name == repository_name, self.repositorys)
+            filter(lambda repository: repository.name == repository_name, self.repositories)
         )[0]

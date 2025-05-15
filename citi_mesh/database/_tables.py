@@ -15,8 +15,12 @@ class TenantTable(SQLTable):
     subdomain = Column(String(length=16), unique=True)
 
     # Relationships
-    repositorys = relationship(
+    repositories = relationship(
         "RepositoryTable", back_populates=None, cascade="all, delete-orphan"
+    )
+
+    analytics = relationship(
+        "AnalyticConfigTable", back_populates=None, cascade="all, delete-orphan"
     )
 
 
@@ -82,12 +86,19 @@ class RepositoryTable(SQLTable):
     )
 
 
-class AnalyticConfig(SQLTable):
+class AnalyticConfigTable(SQLTable):
     tenant_id = Column(String, ForeignKey("tenant.id"))
     name = Column(String(length=32), unique=True)
     display_name = Column(String(length=32), unique=True)
     description = Column(Text)
     value_type = Column(String(length=16))
+
+    possible_values = relationship("AnalyticValueEnumsTable", back_populates=None, cascade="all, delete-orphan")
+
+
+class AnalyticValueEnumsTable(SQLTable):
+    analytic_id = Column(String, ForeignKey("analytic_config.id"))
+    value = Column(String)
 
 
 class SourceTable(SQLTable):

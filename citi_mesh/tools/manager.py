@@ -11,8 +11,11 @@ logger = get_logger(__name__)
 
 class CitiToolManager:
 
-    def __init__(self, tools: list[CitimeshTool]):
-        self.tools = {tool.tool_name: tool for tool in tools}
+    def __init__(self):
+        self.tools = {}
+        
+    def add_tool(self, tool:CitimeshTool):
+        self.tools[tool.tool_name] = tool
 
     def _get_tool(self, name: str):
         logger.info(f"Retrieving tool: {name}")

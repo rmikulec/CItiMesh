@@ -15,15 +15,14 @@ from twilio.request_validator import RequestValidator
 from citi_mesh import __version__
 from citi_mesh.database import _models
 from citi_mesh.database.route_factory import RouteFactory
-from citi_mesh.database.session import get_session_dependency
-from citi_mesh.dev.demo import load_output_config
+from citi_mesh.database.session import get_session_dependency, get_session
 from citi_mesh.engine import CitiEngine
 from citi_mesh.injestors import CSVInjestor, WebpageInjestor
 from citi_mesh.logging import get_logger
-from citi_mesh.utils import send_message_twilio
+from citi_mesh.utils import send_message_twilio, send_message_console
 
 logger = get_logger(__name__)
-
+TENANT_ID = '3bcaeb22-d367-4dec-b473-eb1fe329ceb2'
 
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
@@ -31,8 +30,8 @@ async def app_lifespan(app: FastAPI):
     Infra to handle the Lifecycle of the app
     """
     logger.info("App starting...")
-    # tools = await load_tools()
-    CitiEngine.get_instance(output_model=load_output_config(), tool_manager=[])
+    async with get_session() as session:
+        await CitiEngine().init(tenant_id='3bcaeb22-d367-4dec-b473-eb1fe329ceb2', session=session)
 
     yield
 
@@ -54,6 +53,7 @@ route_factory.add_routes(_models.Tenant)
 route_factory.add_routes(_models.Repository)
 route_factory.add_routes(_models.ResourceType)
 route_factory.add_routes(_models.Resource)
+route_factory.add_routes(_models.AnalyticConfig)
 
 
 # --------------------Status Checks----------------------------------------
@@ -133,6 +133,29 @@ async def sms(
 
     background_tasks.add_task(
         send_message_twilio, to=From, message_func=CitiEngine.chat, phone=From, message=Body
+    )
+
+@app.post("/dev/send_message", tags=["Developer"])
+async def sms(
+    background_tasks: BackgroundTasks,
+    From: str = Form(...),
+    Body: str = Form(...),
+):
+    """
+    Developer tool to mock sending a message to the CitiEngine
+    """
+    engine = CitiEngine()
+
+    background_tasks.add_task(
+        send_message_console,
+        to=From,
+        message_func=engine.get_processing_message,
+        phone=From,
+        message=Body,
+    )
+
+    background_tasks.add_task(
+        send_message_console, to=From, message_func=engine.chat, phone=From, message=Body
     )
 
 

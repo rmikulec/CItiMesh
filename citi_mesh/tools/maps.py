@@ -1,8 +1,9 @@
 import datetime
 import json
 import os
+import aiohttp
 
-import googlemaps
+import async_googlemaps as googlemaps
 import openai
 
 from citi_mesh.tools._base import CitimeshTool
@@ -30,11 +31,11 @@ class GoogleMapsDirectionsTool(CitimeshTool):
             **kwargs,
         )
 
-        self.gmaps = googlemaps.Client(key=os.environ["GOOGLE_MAPS_KEY"])
+        self.gmaps = googlemaps.AsyncClient(aiohttp.ClientSession(), key=os.environ["GOOGLE_MAPS_KEY"])
         self.openai = openai.OpenAI()
 
-    def _lookup_place(self, place_name):
-        res = self.gmaps.find_place(place_name, input_type="textquery")
+    async def _lookup_place(self, place_name):
+        res = await self.gmaps.find_place(place_name, input_type="textquery")
         return res["candidates"][0]["place_id"]
 
     def _clean_via_openai(self, directions_result: dict):
@@ -48,13 +49,13 @@ class GoogleMapsDirectionsTool(CitimeshTool):
 
         return response.choices[0].message.content
 
-    def call(self, origin: str, destination: str) -> str:
+    async def call(self, origin: str, destination: str, *args, **kwargs) -> str:
         # Use Google Maps to convert the text lookup to place IDs
-        origin_place_id = self._lookup_place(origin)
-        destination_place_id = self._lookup_place(destination)
+        origin_place_id = await self._lookup_place(origin)
+        destination_place_id = await self._lookup_place(destination)
 
         # Query Google Maps Direction API
-        directions_result = self.gmaps.directions(
+        directions_result = await self.gmaps.directions(
             f"place_id:{origin_place_id}",
             f"place_id:{destination_place_id}",
             mode="transit",
