@@ -1,5 +1,9 @@
 {
-    "name": "CitiMesh",
-    "description": "A SMS-based chat system designed to serve citizens information about their communities.",
-    "url": "https://github.com/rmikulec/CitiMesh"
+  "name": "CitiMesh",
+  "tagline": "SMS service that connects citizens to community resources",
+  "description": "## What it does\nCitiMesh is an SMS-based service that lets citizens text a number to find resources in their community — food, shelter, healthcare, and local non-profit services — without needing a smartphone or data plan.\n\n## Why\nThe people who most need community resources are often the least likely to have reliable internet. SMS meets them where they are.\n\n## How it works\nA FastAPI backend routes inbound texts through an LLM that maps questions to a curated database of local organizations, and logs anonymized analytics for the government and non-profit partners who run each deployment.\n\n## Stack\nPython, FastAPI, Twilio, Azure, and Terraform for infrastructure.",
+  "url": "https://github.com/rmikulec/CitiMesh",
+  "tags": ["python", "fastapi", "twilio", "azure", "terraform", "llm"],
+  "color": "#14b8a6",
+  "status": "active"
 }
